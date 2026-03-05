@@ -1,0 +1,2 @@
+The QualType class is a small, pass by value, trivial class that stores type qualifiers (such as `const, volatile, restrict`, etc.)
+- Note that these are stored separately from the [[Type|type]] class.
