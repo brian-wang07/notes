@@ -1,0 +1,5 @@
+digraph "CFG for '_Z1fii' function" {
+	label="CFG for '_Z1fii' function";
+
+	Node0x6000031503c0 [shape=record,color="#b70d28ff", style=filled, fillcolor="#b70d2870" fontname="Courier",label="{2:\l|  %3 = icmp ne i32 %0, 0\l  %4 = icmp ne i32 %1, 0\l  %5 = and i1 %3, %4\l  %6 = zext i1 %5 to i32\l  ret i32 %6\l}"];
+}

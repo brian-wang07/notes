@@ -1,0 +1,5 @@
+digraph "CFG for '_Z1fv' function" {
+	label="CFG for '_Z1fv' function";
+
+	Node0x600002814460 [shape=record,color="#b70d28ff", style=filled, fillcolor="#b70d2870" fontname="Courier",label="{0:\l|  %1 = load volatile i32, ptr @_ZL1v, align 4, !tbaa !6\l  %2 = add nsw i32 %1, 1\l  store volatile i32 %2, ptr @_ZL1v, align 4, !tbaa !6\l  %3 = load volatile i32, ptr @_ZL1v, align 4, !tbaa !6\l  ret i32 %3\l}"];
+}

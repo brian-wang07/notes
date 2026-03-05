@@ -1,0 +1,5 @@
+digraph "CFG for '_Z1fi' function" {
+	label="CFG for '_Z1fi' function";
+
+	Node0x60000271c050 [shape=record,color="#b70d28ff", style=filled, fillcolor="#b70d2870" fontname="Courier",label="{1:\l|  %2 = alloca i32, align 4\l  %3 = alloca i32, align 4\l  store i32 %0, ptr %2, align 4\l  %4 = load i32, ptr %2, align 4\l  %5 = icmp sgt i32 %4, 0\l  %6 = zext i1 %5 to i64\l  %7 = select i1 %5, i32 1, i32 2\l  store i32 %7, ptr %3, align 4\l  ret i32 2\l}"];
+}

@@ -1,0 +1,1 @@
+Various clang edge cases and other non-intuitive cases are described here. **MAKE SURE TO COMPILE WITH -O0, LOOK AT -ast-dump AND CFG (opt -passes=mem2reg, dog-cfg)**. use `clang -Xclang -analyze -Xclang -analyzer-checker=debug.DumpCFG file.c` for quick checking (before ir lowering).
