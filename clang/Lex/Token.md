@@ -1,9 +1,0 @@
-- represents a single lexed token.
-- Intended to be used by the lexer and preprocessor libraries, but should not live beyond this (eg. dropped @ AST)
-- Stack allocated, ```sizeof(Token)=16 bytes ``` (32 bit system)
-- Raw tokens dont have any semantic definitions; they are annotated by the parser to create AnnotatedToken.
-	- Eg. if a token `foo` is deduced to be a `typedef` by the parser, then the `foo` `tok::identifier` token is replaced with an annotated `tok::annot_typename`.
-	- There are three main types of annotated tokens:
-		- `tok::annot_typename`: a resolved typename
-		- `tok::annot_cxxscope`: represents the scope operator `::`
-		- `tok::annot_template_id`: represents template identifiers.

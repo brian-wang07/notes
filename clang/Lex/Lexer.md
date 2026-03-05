@@ -1,6 +1,0 @@
-- the `Lexer` class will convert the source string into a [[Token]] stream.
-- Features:
-	- raw mode: scans tokens as quickly and directly as possible, ignoring any preprocessing behaviour. Ex. when lexing within a `#if 0` block.
-	- -C flag: Will return comments as tokens instead of deleting them in preprocessing. This is useful for things such as documentation.
-	- ParsingFilename: will preserve filenames in `#include` and `#import` statements, and return them as a single token.
-- Note that the each invocation of the Lexer::lex method will return the **next** token only.

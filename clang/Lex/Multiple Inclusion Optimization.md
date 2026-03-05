@@ -1,3 +1,0 @@
-- optimization used by the preprocessor to detect `#ifndef X` `#define X` header guards.
-- Prevents multiple inclusion of header files.
-- If a header implements this and is `#include`'d, the preprocessor will check if `X` is already defined. if it is, it will ignore the rest of the header.

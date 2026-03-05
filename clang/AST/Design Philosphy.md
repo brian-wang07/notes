@@ -1,4 +1,0 @@
-- (almost) All AST nodes ([[Type|types]], declarations, statements, exprs, etc.) are **immutable**.
-	- Canonicalizes the semantic meaning of nodes immediately at creation.
-- There are some exceptions, such as that the first declaration of a mutable entity maintains a pointer to the most recent declaration of said entity, which needs to change as more declarations are parsed.
-- The AST object should also stay as faithful as possible to the original; the AST construction will not desugar any source-level constructs.
