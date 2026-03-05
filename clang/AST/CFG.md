@@ -1,0 +1,1 @@
+A CFG is represented internally as a collection of [[Basic Block|basic blocks]]. each basic block is an instance of `CFGBlock`, containing some ordered number of `stmt*`. Conditional control flow for branching and jumps are edges between basic blocks. the `CFG::*iterator` interface allows one to traverse each statement within a given `CFGBlock`.
