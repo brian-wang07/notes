@@ -1,0 +1,254 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Encoding & fonts ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+
+% ── Hyperlinks & auto-updating TOC ────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}   % hidelinks = no ugly red boxes
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{enumitem}              % tighter lists
+\usepackage{parskip}               % space between paragraphs instead of indent
+
+% ── Theorem-like environments (optional, delete if not needed) ─────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+
+
+% Code blocks
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+}
+
+\lstnewenvironment{cppcode}[1][]{\lstset{language=C++, #1}}{}
+\lstnewenvironment{pycode}[1][]{\lstset{language=Python, #1}}{}
+\lstnewenvironment{ccode}[1][]{\lstset{language=C, #1}}{}
+\lstnewenvironment{bashcode}[1][]{\lstset{language=bash, #1}}{}
+\newcommand{\code}[1]{\lstinline|#1|}
+
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{C++ Concurrency in Action, 2ed.}
+\author{Brian}
+\date{\today}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents          % auto-updates on every compile (needs 2 passes)
+\newpage
+
+
+\section{1. Hello, world of concurrency in C++!}
+\begin{itemize}
+    \item Concurrency is two or more things happening at the same time
+    \item In programming, this is when two or more things happen in parallel
+    \item Two main reasons to use concurrency:
+    \begin{enumerate}
+        \item Seperation of Concerns: Things that pertain to a specific task can be run seperately from the rest of the application
+        \item Can run things at the same time, improving performance
+    \end{enumerate}
+\end{itemize}
+
+\section{2. Managing Threads}
+\begin{itemize}
+    \item Every C++ program has at least one thread, which runs \code{main()}.
+    \item A program can launch other threads that have different functions as entrypoints.
+    \item A thread exits when the function returns, similar to how the program exits when \code{main()} returns.
+    \item Simple case:
+\begin{cppcode}
+void do_some_work();
+std::thread my_thread(do_some_work);
+\end{cppcode}
+    \item \code{std::thread} works on any callable type, including ctors, where the object gets copied into the thread (invokes copy constructor!)
+\begin{cppcode}
+class background_task {
+public:
+    void operator() () const {
+        do_something();
+        do_something_else();
+    }
+};
+background_task f;
+std::thread my_thread(f);
+\end{cppcode}
+    \item Prefer uniform initialization when creating a thread, to avoid most vexing parse: if you pass a prvalue to instantiate a thread, this is ambiguous with a function declaration (i.e. \code{std::thread my_thread(background_task());} is a function declaration),
+    \item To prevent most vexing parse:
+\begin{cppcode}
+std::thread my_thread((background_task())); //extra parenthesis
+std::thread my_thread{background_task()}; //uniform initialization, more idiomatic
+\end{cppcode}
+    \item To construct a thread, we need a callable; lambda expressions are also commonly used.
+\begin{cppcode}
+std::thread my_thread([] {
+    do_something();
+    do_something_else();
+});
+\end{cppcode}
+    \item Ensure to explicitly state whether to wait for the thread to finish or leave it to run on it's own; if this is not decided before the thread is destroyed, then the program exits (\code{std::thread} dtor invokes \code{std::terminate()})
+    \item Also, it is imperative to ensure that the thread does not access data that it may outlive (important for if you leave the thread to run).
+    \item Same as use-after-free UB, but more tricky to find. Example:
+\begin{cppcode}
+struct func {
+    int &i;
+    func(int& i_): i(i_) {}
+    void operator() () {
+        for (unsigned j = 0; j < 1000000; ++j) std::cout << i << "\n"; //dangling reference
+    }
+};
+
+void oops() {
+    int some_local_state{0};
+    func my_func(some_local_state);
+    std::thread my_thread(my_func);
+    my_thread.detach(); //dont wait for thread to finish
+} // local variable some_local_state goes out of scope; thread still has reference
+
+int main() {
+    oops();
+    std::cout << "Here!\n"; //prevent compiler optimizing this away
+    return 0;
+}
+\end{cppcode}
+    \item \code{std::thread::join} will ensure to wait for the associated thread to complete. 
+    \item In the above example, replacing \code{my_thread.detach()} with \code{my_thread.join()} will make sure that the function exits only after the thread is completed.
+    \item Once \code{join()} exits, it will clean up all resources associated with the thread, i.e. the \code{std::thread} object itself is invalid. 
+    \item calling \code{join()} once on a thread will set \code{joinable()} to be false, i.e. you cannot join the thread anymore.
+    \item Note that a \code{join()} may be skipped if an exception is thrown after the thread is started but before \code{join()} is called. 
+    \item This can be avoided using a try-catch, however this is very verbose for a pattern that would be used often, and is thus unideal.
+\newpage
+\begin{cppcode}
+struct func;
+void f() {
+    int some_local_state{0};
+    func my_func(some_local_state);
+    std::thread t(my_func);
+    try {
+        do_something_in_current_thread();
+    } catch {
+        t.join();
+        throw;
+    }
+    t.join();
+}
+\end{cppcode}
+    \item It is better to use RAII, and utilize a wrapper type:
+\begin{cppcode}
+class thread_guard {
+//barebones thread RAII wrapper
+    std::thread& t;
+public:
+    explicit thread_guard(std::thread& t_) : t(t_) {}
+    ~thread_guard() {
+        if (t.joinable()) t.join();
+    }
+    thread_guard(thread_guard const&) = delete;
+    thread_guard& operator=(thread_guard const&) = delete;
+}
+\end{cppcode}
+    \item Here, \code{join()} will automatically be called on the thread when it is about to go out of scope. 
+    \item However, if the user has explicitly called \code{join()} already, then it will do nothing.
+\begin{cppcode}
+struct func;
+void f() {
+    int some_local_state{0};
+    func my_func(some_local_state);
+    std::thread t(my_func);
+    thread_guard g(t);
+    do_something_in_current_thread();
+    // less verbose, and thread_guard is reusable
+}
+\end{cppcode}
+    \item Note that in C++20+, \code{std::jthread} (joinable thread) was added that basically is a thread with RAII wrapper.
+    \item Calling \code{detach()} on a thread will leave the thread to run in the background.
+    \item Note that internally, this severes the connection between the actual \code{std::thread} object and the thread spawned by the os.
+    \item It is thus impossible to communicate with the thread after it gets detached, and you cannot get a \code{std::thread&} to the detached thread.
+    \item Detached threads are often referred to daemon threads.
+    \item Detached threads are useful for tasks that must run in the background, dont require two way communication, and last for the duration of the program.
+    \item Such tasks include filesystem monitoring, clearing unused entries, optimizing data structures, thread deadlock watchdogs, etc.
+    \item In order to prevent the UB behaviour described above, it is extremely important to ensure that detached threads never access local variables by reference.
+    \item If absolutely needed (for some reason) pass by value, or if it is large then use a \code{std::shared_ptr}.
+    \item Consider the following example: a word processing application that can support processing multiple documents. This should be ran as a single process, however in order to be able to 
+        multiple documents independently each document should have its own thread. Since each dcoument is independent, they should be detached from each other.
+\begin{cppcode}
+void edit_document(std::string const& filename) {
+    open_document_and_display_gui(filename);
+    while (!done_editing()) {
+        user_command cmd = get_user_input();
+        if (cmd.type == open_new_document) {
+            std::string const new_name = get_filename_from_user();
+            std::thread t(edit_document,new_name);
+            t.detach();
+        } else {
+            process_user_input(cmd);
+        }
+    }
+}
+\end{cppcode}
+    \item As seen in the snippet above, passing arguments to the callable function is done by adding more arguments to the \code{std::thread} ctor.
+    \item By default, this will create a copy of the arguments for the thread, and then are fowarded as rvalues to the function. In the case above, we must ensure to define the signature of f to accept a \code{std::string const&}, to ensure that it can bind
+    to rvalue references.
+    \item As well, note that the promotion from a \code{const char*} to a \code{std::string} only in the context of the new string. Consider:
+\begin{cppcode}
+void f(int i, std::string const& s);
+void oops(int some_param) {
+    char buffer[1024];
+    sprintf(buffer, "%i", some_param);
+    std::thread t(f, 3, buffer);
+    t.detach();
+}
+\end{cppcode}
+    \item In the snippet above:
+    \begin{enumerate}
+        \item On the main thread: \code{oops()} pushes \code{buffer} to the stack.
+        \item \code{std::thread} ctor is called, 
+        \item and it sees \code{char[]} and decays to \code{char*}.
+        \item The thread \code{t} receives a copy of the address that \code{buffer} points to.
+        \item \code{t.detach()} is called, and the \code{oops()} exits.
+        \item The stack frame is popped, and \code{buffer} is freed.
+        \item The thread now converts \code{buffer} to a \code{std::string}, but it contains freed memory.
+        \item Program crashes due to use-after-free.
+    \end{enumerate}
+    \item To prevent this, explicitly cast \code{buffer} to \code{std::string} when passing to ctor.
+    \item The inverse of this issue can also occur: you want a non-const reference, but the object is copied and passed by value.
+\begin{cppcode}
+void update_data_for_widget(widget_id w, widget_data& data);
+void oops_again(widget_id w) {
+    widget_data data;
+    std::thread t(update_data_for_widget, w, data);
+    display_status();
+    t.join();
+    process_widget_data(data);
+}
+\end{cppcode}
+    \item In this case, the program will not compile since \code{data} is passed by value when it expects a \code{widget_data&}. Instead of,
+    once again, relying on the implicit conversion, we can explicitly state to pass a reference through \code{std::thread t(update_data_for_widget, w, std::ref(data))}.
+\end{itemize}
+\end{document}
