@@ -1,5 +1,5 @@
 struct A {
-	int f() {
+	virtual int f() {
 		return 1;	
 	}	
 };

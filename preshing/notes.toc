@@ -1,0 +1,10 @@
+\contentsline {section}{\numberline {1}2011}{2}{section.1}%
+\contentsline {subsection}{\numberline {1.1}Nov 18 - Lock Contention}{2}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}Nov 24 - Lightweight Mutex}{2}{subsection.1.2}%
+\contentsline {section}{\numberline {2}2012}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}May 15 - Memory Reordering}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}June 12 - Introduction to Lock-Free Programming}{5}{subsection.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.1}Atomic Read-Modify-Write (RMW) Operations}{5}{subsubsection.2.2.1}%
+\contentsline {subsubsection}{\numberline {2.2.2}Compare-And-Swap (CAS) loops}{5}{subsubsection.2.2.2}%
+\contentsline {subsubsection}{\numberline {2.2.3}Sequential Consistency}{6}{subsubsection.2.2.3}%
+\contentsline {subsection}{\numberline {2.3}September 13 - Acquire-Release Semantics}{6}{subsection.2.3}%
