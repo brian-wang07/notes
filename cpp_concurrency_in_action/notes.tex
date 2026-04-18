@@ -78,6 +78,7 @@
 \end{itemize}
 
 \section{2. Managing Threads}
+\subsection{Launching Threads}
 \begin{itemize}
     \item Every C++ program has at least one thread, which runs \code{main()}.
     \item A program can launch other threads that have different functions as entrypoints.
@@ -212,6 +213,9 @@ void edit_document(std::string const& filename) {
     }
 }
 \end{cppcode}
+\end{itemize}
+\subsection{Passing arguments to a thread function}
+\begin{itemize}
     \item As seen in the snippet above, passing arguments to the callable function is done by adding more arguments to the \code{std::thread} ctor.
     \item By default, this will create a copy of the arguments for the thread, and then are fowarded as rvalues to the function. In the case above, we must ensure to define the signature of f to accept a \code{std::string const&}, to ensure that it can bind
     to rvalue references.
@@ -250,5 +254,417 @@ void oops_again(widget_id w) {
 \end{cppcode}
     \item In this case, the program will not compile since \code{data} is passed by value when it expects a \code{widget_data&}. Instead of,
     once again, relying on the implicit conversion, we can explicitly state to pass a reference through \code{std::thread t(update_data_for_widget, w, std::ref(data))}.
+    \item You can also pass a member function pointer as the function, provided that you supply a suitable a suitable object pointer with it:
+\begin{cppcode}
+class X {
+public: 
+    void do_something();
+};
+X my_x;
+std::thread t(&X::do_something(), &my_x);
+\end{cppcode}
+    \item To use move semantics, and especially in the case of \code{std::unique_ptr}, \code{std::move} must explicitly be invoked. 
+\begin{cppcode}
+void do_something(std::unique_ptr<big_object>);
+std::unique_ptr<big_object> p(new big_object);
+p->prepare_data(42);
+std::thread t(do_something, std::move(p));
+\end{cppcode}
+    \item 
+
 \end{itemize}
+\subsection{Transferring ownership of a thread}
+\begin{itemize}
+    \item Threads cannot be copied but they can be moved
+    \item Below is an example that creates two threads and transfers ownership amongst three \code{std::thread} instances. 
+\begin{cppcode}
+void foo();
+void bar();
+std::thread t1(foo);
+std::thread t2 = std::move(t1);
+t1 = std::thread(bar);
+std::thread t3;
+t3 = std::move(t2);
+t1 = std::move(t3); // terminates the program!
+\end{cppcode}
+    \begin{enumerate}
+        \item A new thread is started and associated with \code{t1}. 
+        \item Ownership of the thread is transferred from \code{t1} to \code{t2}.
+        \item \code{t1} is now associated with a thread of execution, \code{t2} is associated with the thread running \code{foo}.
+        \item A new \code{std::thread} instance is created \code{t3}, but not associated with a thread of execution.
+        \item \code{t1} is then transferred ownership to a \code{std::thread} prvalue running \code{bar}, thus the move is implicit.
+        \item Ownership of the thread running \code{foo} is then transferred from \code{t2} to \code{t3}. Now, \code{t1} is associated with the thread running \code{bar}, \code{t2} is invalid, and \code{t3} is associaed with the thread running \code{foo}.
+        \item Attempting to move \code{t3} to \code{t1} will cause the program to terminate, as \code{t1} is already associated with an existing thread of execution.
+    \end{enumerate}
+    \item Since threads can be moved, they can also be returned from functions:
+\begin{cppcode}
+std::thread f() {
+    void some_function();
+    return std::thread(some_function);
+}
+\end{cppcode}
+    \item \code{std::jthread} RAII implementation (C++20 and newer, uses concepts):
+\begin{cppcode}
+#include <concepts>
+
+class joining_thread {
+    std::thread t;
+public:
+    joining_thread() noexcept = default;
+
+    template<typename Callable, typename... Args>
+    requires std::invocable<Callable, Args...>
+    explicit joining_thread(Callable&& func, Args&&... args) :
+        t(std::forward<Callable>(func), std::forward<Args>(args)...) {}
+
+    ~joining_thread() {
+        if (joinable()) join();
+    }
+
+    joining_thread(const joining_thread&) = delete;
+    joining_thread& operator=(const joining_thread&) = delete;
+
+    joining_thread(joining_thread&& other) noexcept :
+        t(std::move(other.t)) {}
+
+    joining_thread& operator=(joining_thread&& other) noexcept {
+        if (joinable()) join();
+        t = std::move(other.t);
+        return *this;
+    }
+};
+\end{cppcode}
+    \item In the case where threads are used to subdivide work done in an algorithm, you must check that all threads have finished. We can write code like the following which spawns a number of threads and waits for them all to finish.
+    \item Note that this only works with moveable containers.
+\begin{cppcode}
+void do_work(unsigned id);
+void f(unsigned k) {
+    std::vector<std::thread> threads;
+    threads.reserve(k);
+    for(unsigned i = 0; i < k; ++i) {
+        threads.emplace_back(do_work, k); // spawns k threads
+    }
+    for (auto& t: threads) {
+        t.join(); // calls join on each thread, ensuring that they are all completed before f() returns
+    }
+}
+\end{cppcode}
+\end{itemize}
+\subsection{Choosing the number of threads at runtime}
+\begin{itemize}
+    \item The number of truly concurrent threads that are available depends on the machine that is running the program.
+    \item \code{std::thread::hardware_concurrency()} provides a hint for how many truly concurrent threads are avaiable: note that this information may not be available, and will return \code{0}.
+\end{itemize}
+\subsection{Identifying threads}
+\begin{itemize}
+    \item Thread identifier is of type \code{std::thread::id}.
+    \item The id for the thread associated with a specific \code{std::thread} object is retrieved via the \code{get_id()} member function. This will return the default constructed \code{std::thread::id} object if it doesnt have an associated thread.
+    \item Calling \code{std::this_thread::get_id()} which is in the thread header will also retrieve the thread id for the thread in which it was called on.
+    \item thread ids can be comapred, hashed, sorted, etc.
+\end{itemize}
+\section{Sharing data bewteen threads}
+\subsection{Problems with sharing data bewteen threads}
+\begin{itemize}
+    \item All issues with sharing data between threads come from modifying the data.
+\end{itemize}
+    \begin{definition}[Invariant]
+        A statement that is always true about a particular data stucture. E.g. "This variable contains the number of items in a list".
+    \end{definition}
+\begin{itemize}
+    \item To an external observer, invariants must always hold. However, while changing a data structure the state of the invariant may be invalid. 
+    \item If a thread were to attempt to access the invariant in this invalid state, it may cause bugs or crashes.
+    \item Consider a doubly linked list. We can say that an invariant for this data structure is that if the "next" pointer for node A points to node B, then the "previous" pointer for node B points to node A. 
+    \item While removing a node from this list, we must update two pointers, one on either side.
+    \item The invariant is broken during the time when one pointer is updated but the other is not. Concretely, we outline the steps to delete a node:
+    \begin{enumerate}
+        \item Identify node to delete N.
+        \item Update link from N-1 to point to N+1.
+        \item update the link from N+1 to point to N-1.
+        \item delete N.
+    \end{enumerate}
+    \item During the time between steps 2 and 3, the invariant does not hold. If a thread were to modify data that is of broken invariants, or in this case the "previous" pointer for N-1, we get what is called a \textit{race condition}.
+    \begin{definition}[Race Condition]
+        When the outcome of something depends on the relative ordering of the order of execution of two or more threads; the threads race to complete their respective operation.
+    \end{definition}
+    \item Problematic race conditions can be catastrophic; in the example above, if we were to get the scenario described then we are accessing freed memory.
+    \item According to the C++ spec, data races are considered undefined behaviour.
+    \item Race conditions are difficult to debug as they are not always consistent; if an operation only takes a few cpu instructions and is done consecutively, then the window for a race condition to exist is very small. This causes the bug to not be consistently reproducible.
+    \item There are two main ways to deal with this: \textit{lock-based} (slower, easier to implement and reason about) vs \textit{lock-free} (faster, much more difficult to implement). Lock-free programming and data structures are covered later, as they require deep knowledge and nuance in the C++ memory model.
+    \subsection{Protecting shared data with mutexes}
+\end{itemize}
+\begin{definition}[Mutex]
+    A mutex (\textbf{Mut}ual \textbf{ex}clusion) is a thread synchronization technique that revolves around locking the shared data before accessing it, to ensure no other threads can access the data. Mutexes are implemented in C++ via the \code{<mutex>} header. To lock it, use \code{lock()} and \code{unlock()} to unlock; generally, however, it is not recommended to lock/unlock your code directly, as this requires you to remember to call \code{unlock()} every time. Instead, C++ provides a RAII wrapper for a mutex via \code{std::lock_guard}.
+\end{definition}
+\begin{itemize}
+\newpage
+\begin{cppcode}
+#include <list>
+#include <mutex>
+#include <algorithm>
+
+std::list<int> my_list;
+std::mutex my_mutex;
+void add_to_list(int new_value) {
+    std::lock_guard<std::mutex> guard(my_mutex);
+    my_list.push_back(new_value);
+}
+bool list_contains(int value_to_find) {
+    std::lock_guard<std::mutex> guard(my_mutex);
+    return std::find(my_list.begin(), my_list.end(), value_to_find) != my_list.end();
+}
+\end{cppcode}
+    \item In the example above, we have a single global variable \code{my_list} protected by a single global mutex \code{my_mutex}. Each function will lock the mutex, ensuring that accesses to each is mutually exclusive: \code{list_contains()} will never see the list partway through a modificatin by \code{add_to_list()}.
+    \item Structuring protected data with mutexes also poses an interesting challenge: idiomatically, we would want to package the entire program above into a single class, and abstract away the mutex; interface the data with \code{add_to_list} and \code{list_contains},and have \code{my_list} be private. 
+    \item The issue comes when the member functions return references to the protected data; Now this makes it so that the mutexes are essentially useless.
+    \item As well, you must also ensure that they dont pass references of protected data into functions outside of the mutex's control. For example,
+\begin{cppcode}
+class some_data {
+    int a; 
+    std::string b;
+public:
+    void foo();
+};
+class wrapper {
+    some_data data;
+    std::mutex m;
+public:
+    template<typename Function>
+    void process_data(Function func) {
+        std::lock_guard<std::mutex> l(m);
+        func(data);
+    }
+};
+some_data* unprotected;
+void malicious_function(some_data& protected_data) {
+    unprotected = &unprotected_data;
+}
+wrapper x;
+void bar() {
+    x.process_data(malicious_function);
+    unprotected->foo();
+}
+\end{cppcode}
+    \item In the snippet above, the call to the user specifie \code{func} function means that \code{bar} can pass in \code{malicious_function} to bypass the mutex and then call \code{foo} without the mutex being locked.
+    \item As well, many interfaces for data structures may inherentely contain data races that canont be protected by mutexes. consider the following implementation of a stack:
+\begin{cppcode}
+template<typename T, typename Container = std::deque<T>>
+class stack {
+public:
+    explicit stack(const Container&);
+    explicit stack(Container&& = Container());
+    template <class Alloc> explicit stack(const Alloc&);
+    template <class Alloc> stack(const Container&, const Alloc&);
+    template <class Alloc> stack(Container&&, const Alloc&);
+    template <class Alloc> stack(stack&&, const Alloc&);
+    bool empty() const;
+    size_t size() const;
+    T& top();
+    T const& top() const;
+    void push(T const&);
+    void push(T&&);
+    void pop();
+    void swap(stack&&);
+    template <class... Args> void emplace(Args&&... args)
+};
+\end{cppcode}
+    \item The issue with this is that the functions \code{empty()} and \code{size} cannot be trusted. Consider:
+\begin{cppcode}
+stack<int> s;
+if(!s.empty()) { //Another thread calls pop(), race condition!
+    int const value = top();
+    s.pop();
+    do_something(value);
+}
+\end{cppcode}
+    \item As well, there exists another race condition, in between lines 4 and 5. Even if the stack data structure is protected by a lock, we could still get the following case:
+\begin{center}
+\begin{tabular}{c c}
+\hline
+Thread A & Thread B \\
+\hline
+\hline
+\code{if(!s.empty())} & \\
+                      & \code{if(!s.empty())} \\
+\code{int const value = s.top();} & \\
+                          & \code{int const value = s.top();} \\
+\code{s.pop();} & \\
+\code{do_something(value);} & \code{s.pop();} \\
+                            & \code{do_something(value);}\\
+\hline
+\end{tabular}
+\end{center}
+    \item In this case, both thread A and B would read the exact same value for \code{s.top()}. Intuitively, we would think to wrap the entire block in a lock guard. However, there are issues with data integrity in the case where the objects in the stack raise exceptions. Consider:
+\begin{cppcode}
+T foo(stack& data) {
+    std::lock_guard<std::mutex> lock(m);
+    T result = data.top();
+    data.pop();
+    return result;
+}
+\end{cppcode}
+    \item Line 3 will invoke the copy constructor for type \code{T}. This element is then popped off the stack, and then returned to the caller. If an exception were to be raised in lines 3 (during copy construction) or during returning the value, the caller would receive an exception.
+    \item Furthermore, since the data has already been popped, it is permanently lost.
+    \item There are a few ways to amend this, each with their own tradeoffs: 
+    \begin{enumerate}
+        \item Pass by reference: If we define pop to take a reference of the variable we want to store the popped element to, we cannot end up in the invalid state: if an exception is raised on the copy constuctor, it terminates and the data is not popped. if it fails on the pop, then result already has the popped element. The disadvantage of this implementation is that we must construct an instance of the stack's value prior to calling pop, which may be expensive depending on the type.
+        \item Require a noexcept copy constructor or move constructor: Since this only occurs when the copy constructor or move constructors raise an exception, if we were to enforce that the object is has a \code{noexcept} copy and move constructor then it would circumnavigate this error altogether. This can be in some cases, obviously, not ideal, as we limit the types that our stack supports to only objects that do not throw on copy/move.
+        \item Return a shared pointer to the popped item: This is generally seen as the most idiomatic solution to this problem. Since moving a \code{shared_ptr} is guaranteed to never throw, it is completely safe; it either fully errors out or it fully completes. Note that \code{shared_ptr} is generally used for this situation as it avoids memory leaks and the standard library implements behaviour for memory allocation that doesn't use \code{new} and \code{delete}. This is important because requiring each object on the stack to be allocated via \code{new} would impose significant overhead.
+    \end{enumerate}
+    \item Ideally, implementing all three would be ideal: 
+\begin{cppcode}
+struct empty_stack : std::exception {
+    const char* what() const noexcept;    
+};
+template <typename T>
+class threadsafe_stack {
+public:
+    threadsafe_stack();
+    threadsafe_stack(const threadsafe_stack&);
+    threadsafe_stack& operator=(const threadsafe_stack&) = delete;
+    void push(T new_value);
+    std::shared_ptr<T> pop();
+    void pop(T& value);
+    bool empty() const;
+};
+\end{cppcode}
+    \item It is very tricky to get the granularity of locking correct; lock too small and the protection doesn't account for all race conditions. Lock too much and you lose benefits of threading altogether.
+    \item The first versions of the linux kernel used a single global lock, meaning that a two processor system had much worse performance than two single-processor systems.
+\end{itemize}
+\begin{definition}[Deadlock]
+    When a pair of threads needs to lock a pair of mutexes, and each thread has one mutex and is waiting for the other. Neither thread can proceed, since each thread is waiting on the other.
+\end{definition}
+\begin{itemize}
+    \item Generally, ensure to lock mutexes in the same order, i.e. always lock mutex A before mutex B. 
+    \item \code{std::lock} is a function that can lock two or more mutexes while guaranteeing that they wont deadlock. 
+\begin{cppcode}
+class some_big_object;
+void swap(some_big_object& lhs, some_big_object& rhs);
+class X {
+private:
+    some_big_object some_detail;
+    std::mutex m;
+public:
+    X(some_big_object const& sd) : some_detail(sd) {}
+    friend void swap(X& lhs, X& rhs) {
+        if (&lhs == &rhs) return ;
+        std::lock(lhs.m, rhs.m);
+        std::lock_guard<std::mutex> lock_a(lhs.m, std::adopt_lock);
+        std::lock_guard<std::mutex> lock_b(rhs.m, std::adopt_lock);
+        swap(lhs.some_detail, rhs.some_detail);
+    }
+};
+\end{cppcode}
+    \item Consider the case without \code{std::lock}:
+    \begin{enumerate}
+        \item Thread A calls \code{swap(X, Y)}. It locks \code{X.m}, and is about to lock \code{Y.m}.
+        \item At the same time, thread B calls \code{swap(Y, X)}. It locks \code{Y.m}, and is about to lock \code{X.m}. 
+        \item Both threads are waiting on the other, thus a deadlock occurs.
+    \end{enumerate}
+    \item \code{std::lock} handles the logic in the order of locking, to ensure that it always happens in the same order. Since the mutexes are already locked, we pass \code{std::adopt_lock} to the lock guard to indicate a transfer in ownership of the lock and that the mutex is already locked. 
+    \item Since the mutexes are always locked in the same order, there is never a deadlock.
+    \item We can also use \code{std::scoped_lock<>}:
+\begin{cppcode}
+// ...
+    std::scoped_lock guard(lhs.m, rhs.m);
+    swap(lhs.some_detail rhs.some_detail);
+\end{cppcode}
+\item \code{std::scoped_lock} uses the same algorithm as \code{std::lock}, and thus the mutexes are always locked in the same order. \textit{note: \code{std::scoped_lock} requires a variadic template, however since C++17 CTAD allows this to be implicit.}
+    \item Ways to avoid deadlocks:
+    \begin{enumerate}
+        \item \textbf{Don't wait for another thread if there is any possibility it's waiting for you.}
+        \item Avoid nested locks: Don't acquire a lock if you already hold one.
+        \item Always acquire locks in a fixed order: try to utilize \code{std::lock} whenever possible. If this is not possible, then define some fixed order to acquire the locks. For example, in the linked list when deleting a node, define a direction to acquire nodes; if traversing from head->tail, acquire normally, but if traversing from tail->head, then acquire in inverse order. This is known as "hand-over-hand" locking.
+    \end{enumerate}
+    \item we can also use \code{std::unique_lock} as well; this is templated with a mutex, and allows a lock to be deferred; i.e. you can define a unique lock and keep it unlocked unil it is needed. As well, it is moveable, and thus ownership can be transferred and it can be returned from functions.
+\begin{cppcode}
+// ...
+    std::unique_lock<std::mutex> lock_a(lhs.m, std::defer_lock); // keep mutex unlocked
+    std::unique_lock<std::mutex> lock_b(rhs.m, std::defer_lock);
+    std::lock(lock_a, lock_b); // lock in a safe order
+    swap(lhs.some_detail, rhs.some_detail);
+\end{cppcode}
+    \item The unique lock also contains a flag for if it owns the current lock. If the lock instance owns the mutex, it must unlock the mutex when the dtor is called, else it must not unlock the mutex.
+    \item Generally \code{scoped_lock} is preferred, unless in times where ownership of a lock needs to be transferred, for example when you want to prepare data safely before returning the lock to the caller:
+\begin{cppcode}
+std::unique_lock<std::mutex> get_lock() {
+    extern std::mutex some_mutex;
+    std::unique_lock<std::mutex> lk(some_mutex);
+    prepare_data();
+    return lk; // lock is moved, thus dtor does NOT invoke unlock()
+}
+void process_data() {
+    std::unique_lock<std::mutex> lk(get_lock());
+    do_something();
+}
+\end{cppcode}
+\end{itemize}
+\subsection{Alternative facilities for protecting shared data}
+\begin{itemize}
+    \item Consider the case where an object only needs protection when being constructed, but is then read-only, requiring no explicit thread synchronization. 
+    \item Consider the following example for single threaded lazy evaluation:
+\begin{cppcode}
+std::shared_ptr<some_big_resource> resource_ptr;
+void foo() {
+    if (!resource_ptr) {// only construct some_big_resource if it has not already been constructed
+        resource_ptr.reset(new some_big_resource);
+    }
+    resource_ptr->do_something();
+}
+\end{cppcode}
+    \item if \code{some_big_resource} were read-only, we would only need to protect the initialization. However, wrapping this in a mutex would cause threads to always lock this portion, even if it has already been constructed:
+\begin{cppcode}
+std::shared_ptr<some_big_resource> resource_ptr;
+std::mutex resource_mutex;
+void foo() {
+    std::unique_lock<std::mutex> lk(resource_mutex); // A lot of contention here!
+    if (!resource_ptr) {
+        resource_ptr.reset(new some_big_resource);
+    }
+    lk.unlock();
+    resource_ptr->do_something();
+}
+\end{cppcode}
+    \item Fix: use the \code{std::once_flag} and \code{std::call_once}. 
+    \item \code{std::once_flag} tracks three states: not started, in progress, and completed. 
+    \item If a thread tries to access the critical section while the first one is still working, it gets blocked. If the critical section throws an exception, the flag is reset to not started. 
+    \item In C++11+, a static local variable can be used as well, giving identical behaviour.
+\begin{cppcode}
+std::once_flag resource_flag;
+void init_resource() {
+    resource_ptr.reset(new some_big_resource);
+}
+void foo() {
+    std::call_once(resource_flag, init_resource);
+    resource_ptr->do_something();
+}
+// OR 
+std::shared_ptr<some_big_resource> get_resource() {
+    std::shared_ptr<some_big_resource> res = std::make_shared<some_big_resource>(); //Guaranteed to be thread safe, C++11+
+    return res;
+}
+void foo() {
+    get_resource()->do_something();
+}
+\end{cppcode}
+    \item \textit{Note that the ctor fro \code{some_big_resource} must not invoke \code{foo()}, as this would cause a circular dependency and deadlock.}
+    \item Shared mutex: Useful for when you have multiple readers but only one writer. A shared mutex allows multiple readers at the same time, but they get blocked when the writer is accessing the data. 
+\begin{cppcode}
+#include <shared_mutex>
+std::shared_mutex sm;
+std::map<int, int> data;
+// Multiple readers
+void read_data(int key) {
+    std::shared_lock<std::shared_mutex> lock(sm);
+    auto val = data[key];
+}
+// Single writer 
+void write_data(int key, int val) {
+    std::lock_guard<std::shared_mutex> lock(sm); //or std::unique_lock
+    data[key] = val; //all readers are blocked
+}
+\end{cppcode}
+\end{itemize}
+\section{Synchronizing concurrent operations}
+
+\section{The C++ memory model and operations on atomic types}
 \end{document}
