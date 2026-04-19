@@ -667,4 +667,144 @@ void write_data(int key, int val) {
 \section{Synchronizing concurrent operations}
 
 \section{The C++ memory model and operations on atomic types}
+\subsection{Memory model basics}
+\begin{itemize}
+    \item Two main aspects to the memory model: the basic structural aspects, which pertain to how things are layed out in memory, and the concurrent aspects. 
+    \item All data in C++ is made up of \textit{objects}. 
+    \item An object, in this case, is defined as "a region of storage". 
+    \item An object is stored in one or more memory locations. Each memory location is either an object of a scalar type, such as integral types, or a sequence of adjacent bit fields. 
+    \item While bit fields themselves are objects, they are still counted to be at the same memory location. Consider:
+\begin{cppcode}
+struct my_data {
+    int i;
+    double d;
+    unsigned bf1:10;
+    int bf2:25;
+    int :0;
+    int bf4:9;
+    int i2;
+    char c1, c2;
+    std::string s;
+};
+\end{cppcode}
+    \item Would look something like this in memory:
+\begin{center}
+    \begin{tabular}{|c|}
+        \hline
+        i \\
+        \hline 
+        d \\
+        \hline 
+        bf1 \vline  bf2 \\
+        \hline 
+        bf4 \\
+        \hline 
+        i2 \\
+        \hline 
+        c1 \\ 
+        \hline 
+        c2 \\
+        \hline 
+        s (multiple contiguous locations) \\ 
+        \hline
+    \end{tabular}
+\end{center}
+    \item the \code{int :0} is an anonymous zero size bitfield, signalling the compiler to seperate \code{b1}, \code{b2} with \code{b4}.
+    \item Important: Every variable is an object, including those that are members of other objects. 
+    \item Every object occupies at least one memory location. 
+    \item Variables of primative types occupy exactly one memory location. 
+    \item Adjacent bitfields are part of the same memory location.
+    \item In C++, two different threads can safely modify the data within two different memory locations at the same time. 
+    \item In the example above, it would not be safe to update \code{bf1} and \code{bf2} at the same time, as they occupy the same memory location. 
+    \item If there is no enforced ordering between two accesses to the same memory location, this is a data race which is defined to be undefined behaviour. 
+    \item Any instance of undefined behaviour in a program means that the entire program is undefined, and it may do anything. 
+    \item This undefined behaviour can be avoided via atomic operations, even if there exists a data race.
+    \item Every C++ object has a modification order, which describes all the writes to that object from all threads, starting with intialization. 
+    \item Most cases this varies between runs, however within a given run all threads must agree on the order. 
+\end{itemize}
+\subsection{Atomic operations and types in C++}
+\begin{definition}[Atomic operation]
+   An operation that is indivisible. There does not exist a "half-done" state; it is either done or not done. The C++ compiler guarantees that if a read to a value of an object is atomic, then all modifications done to that object will also be atomic; This, however, does not guarantee that the read will be of the latest state of the object. 
+\end{definition}
+\begin{itemize}
+    \item Atomic types exist in the \code{<atomic>} header. 
+    \item Depending on the context, a \code{std::atomic<type>} may just be the type wrapped in a mutex. This can be checked via \code{std::atomic<type>::is_lock_free()}. 
+    \item Example: a \code{std::atomic<long long>} may only be atomic if it is aligned to an 8-byte boundary in memory. If it is not, the compiler may fall back to a mutex.
+    \item Since C++17, all atomic types have a \code{static constexpr} member variable,\newline \code{X::is_always_lock_free}. This holds the value 0 if \code{X} is never lock free, 2 if it is always lock free in all contexts, and 1 if it depends on the use case. 
+    \item The only atomic type that doesnt have a \code{is_always_lock_free} is the \code{std::atomic_flag}, which is an atomic boolean type. This is required to always be lock free, no matter the hardware. Note that this is distinct from \code{std::atomic<bool>}. 
+    \item The \code{std::atomic_flag} has two member functions: \code{test_and_set()}, which queries the flag and sets it, and \code{clear()} which resets it. 
+    \item Most atomic types have no copy constructor or assignment. 
+    \item Most atomic types have \code{load()}, \code{store()}, \code{exchange()}, \code{compare_exchange_weak()}, and\newline \code{compare_exchange_strong()}. 
+    \item They also support compound assignment operators when applicable: \code{+=}, \code{-=}, etc. 
+    \item The compound operators also have named functions: \code{fetch_add()}, \code{fetch_sub()}, etc. 
+    \item Using the compound operator itself will return the value after the change; using the named function will return the value before the change. 
+    \item All atomic operations also have an optional memory-ordering argument. This is one of the values in the \code{std::memory_order} enum, which can be one of the following: 
+    \begin{enumerate}
+        \item \code{std::memory_order_relaxed}
+        \item \code{std::memory_order_acquire}
+        \item \code{std::memory_order_consume}
+        \item \code{std::memory_order_acq_rel}
+        \item \code{std::memory_order_release}
+        \item \code{std::memory_order_seq_cst}
+    \end{enumerate}
+    \item If this is not specified, the default argument is \code{std::memory_order_seq_cst}, the strongest memory ordering. 
+    \item The orderings are seperated into three categories, depending on the operation being done: 
+    \begin{enumerate}
+        \item \textit{Store} operations, which can have \code{memory_order_relaxed memory_order_release}, or \code{memory_order_seq_cst}
+        \item \textit{Load} operations, which can have \code{memory_order_relaxed, memory_order_consume, memory_order_acquire}, or \code{memory_order_seq_cst}
+        \item \textit{Read-Modify-Write} operations, which can have any memory ordering. 
+    \end{enumerate}
+\end{itemize}
+\subsubsection{Operations on \texorpdfstring{\code{std::atomic_flag}}{std::atomic\_flag}} 
+\begin{itemize}
+    \item \code{std::atomic_flag} is the simplest atomic type. It is deliberately very basic, and isn't meant to be used directly. 
+    \item Rather, \code{std::atomic_flag} is to be used as a buiding block for other atomic types. 
+    \item \code{std::atomic_flag} must be initialized with the \code{ATOMIC_FLAG_INIT}. 
+\begin{cppcode}
+std::atomic_flag f = ATOMIC_FLAG_INIT;
+\end{cppcode}
+    \item There are three things you can do with an atomic flag: destroy it, clear it, or query it's previous value. These correspond to the dtor, \code{clear()}, and \code{test_and_set()} member functions. 
+    \item The two member functions can have their memory ordering specified; \code{clear()} is a store operation and thus cannot have \code{memory_order_acquire} or \code{memory_order_acq_rel} semantics, but \code{test_and_set()} is a RMW thus it can have any ordering. 
+\begin{cppcode}
+// ... 
+f.clear(std::memory_order_release);
+bool x = f.test_and_set();
+\end{cppcode}
+    \item While limited, this type can be used to implement a basic spinlock mutex: 
+\begin{cppcode}
+class spinlock_mutex {
+    std::atomic_flag flag;
+public:
+    spinlock_mutex() : flag(ATOMIC_FLAG_INIT) {}
+    void lock() {
+        while(flag.test_and_set(std::memory_order_acquire));
+    }
+    void unlock() {
+        flag.clear(std::memory_order_release);
+    }
+};
+\end{cppcode}
+    \item If the condition in the while loop evaluates to false, this means that the mutex was unlocked. The thread that read this value will then lock the mutex, causing all other threads to spin.
+\end{itemize}
+\subsubsection{Operations on \texorpdfstring{\code{std::atomic<bool>}}{std::atomic<bool>}}
+\begin{itemize}
+    \item \code{std::atomic<bool>} can be constructed from and assigned to by non-atomic \code{bool}. 
+\begin{cppcode}
+std::atomic<bool> b{true};
+b = false;
+\end{cppcode}
+    \item The assignment operator, similar to other atomic types, will return the value instead of a reference. 
+    \item This is because returning a reference to an atomic is not necessarily atomic; the value may have changed. Thus, returning the value of the atomic is preferred. 
+    \item Writes are done via \code{store()}, and \code{test_and_set} is replaced with \code{exchange()}, allowing the user to set the value to whatever they want. 
+    \item There is also support for two compare-exchange operations. This will compare the value of an atomic variable with a supplied expected value, and stores a supplied desired value if they are equal (the operation succeeds, returns true). If they are not equal, then the expected value is updated to be the value previously stored (the operation fails, returns false). 
+    \item For \code{compare_exchange_weak()}, the store may not be successful even if the expected equals the previous. In this case, the value stays unchanged, and the function returns false. This is mainly due to the processor not supporting a single compare-and-exchange instruction, and thus cannot guarantee that it happens atomically. This is known as a \textit{spurious failure}. 
+    \item Due to this, \code{compare_exchange_weak()} is usually used in a loop: 
+\begin{cppcode}
+bool expected = false;
+extern std::atomic<bool> b; //set somewhere else 
+while (!b.compare_exchange_weak(expected, true) && !expected);
+\end{cppcode}
+    \item Here, the thread will spin until the CAS succeeds; while expected is false, it fails spuriously. 
+    \item On the other hand, \code{compare_exchange_strong()} is guaranteed to return false iff the value wasn't equal to the expected value. However, on some processors, this may be slower.
+\end{itemize}
 \end{document}
