@@ -806,5 +806,182 @@ while (!b.compare_exchange_weak(expected, true) && !expected);
 \end{cppcode}
     \item Here, the thread will spin until the CAS succeeds; while expected is false, it fails spuriously. 
     \item On the other hand, \code{compare_exchange_strong()} is guaranteed to return false iff the value wasn't equal to the expected value. However, on some processors, this may be slower.
+    \item If you want to change the stored value regardless of the expected, then set expected to stored in a loop. 
+    \item Compare-exchange takes two memory ordering parameters: first for success, second for fail 
+    \item Failed compare-exchange has no write thus memory ordering on this cannot be \code{memory_order_release} nor \code{memory_order_acq_rel}.
+    \item Only specifying success ordering wil implicitly set the failure ordering to the same, except for release (which will default to relaxed) and acquire-release (which will default to acquire).
+\end{itemize}
+\subsubsection{Operations on \texorpdfstring{\code{std::atomic<T*>}}{std::atomic<T*>}: pointer arthimetic}
+\begin {itemize}
+    \item has the same basic operations as \code{std::atomic<bool>}
+    \item Pointer arithmetic is done via \code{fetch_add} or \code{fetch_sub}, compound assignment, or with post/pre increment/decrement.
+    \item Note: \code{+=} and \code{fetch_add} are not equal! \code{fetch_add} returns the original, compound assingment returns the modified.
+\end {itemize}
+\subsubsection{The \texorpdfstring{\code{std::atomic<>}}{std::atomic<>} primary class template}
+\begin {itemize}
+    \item Any user defined type is exposed the same interface as \code{std::atomic<bool>}, so long as it meets the following:
+    \begin {enumerate}
+        \item Must have a trivial copy-assignment.
+        \item By implication, it must also not have any virtual functions or virtual base classes.
+        \item Every base class and non-static data member of the type must also have a trivial copy-assignment operator.
+    \end {enumerate}
+    \item As well, compare-exchange operations do a bitwise comparison via \code{memcmp}, ignoring any overloaded comparison operators. This may cause a compare-exchange to fail due to things such as padding bits.
+    \item These restrictions are put in place as the compiler treats atomics as a raw block of bits; non-trivial assignment may cause operations to leak references to non-atomic operations, as well as having unpredictable memory layouts due to the added overhead of a virtual pointer/table.
+    \item Atomic types should only be used for simple operations; while atomic operations on more complex types such as \code{std::vector<>} is possible, it is preferred to just use a \code{std::mutex}.
+\end {itemize}
+\subsection{Synchronizing operations and enforcing ordering}
+\begin {itemize}
+    \item Suppose you have one writer thread that is populating a datastructure to be read by a second thread. In order to prevent any data races, the reader thread may only access the data when a "ready" flag is set by the writer:
+\begin{cppcode}
+#include <vector>
+#include <atomic>
+#include <iostream>
+#include <immintrin.h> // obviously were on x86 intel
+std::vector<int> data;
+std::atomic<bool> data_ready{false};
+void reader_thread() {
+    while(!data_ready.load()) {
+        _mm_pause();
+    }
+    std::cout << "The answer=" << data[0] << "\n";
+}
+
+void writer_thread() {
+    data.push_back(42);
+    data_ready = true;
+}
+\end{cppcode}
+    \item Without memory ordering, this would be UB as we have concurrent reading/writing to a non-atomic type without an enforced ordering.
+    \item The flag \code{data_read} enables the memory model relations \textbf{happens-before} and \textbf{synchronizes-with}:
+    \begin{itemize}
+        \item The write of the data happens before the write to the \code{data_ready} flag.
+        \item The read of the flag happens before the read of the data.
+        \item By making the reader spin up until the data is ready, we synchronize the reader-writer threads.
+    \end{itemize}
+\end {itemize}
+\begin{definition}[Synchronizes-with]
+Consider a suitably-tagged atomic write operation \code{W} on an atomic \code{x}. This synchronizes with a 
+suitably-tagged atomic read operation if:
+\begin {enumerate}
+    \item it reads the value on \code{x} that \code{W} wrote,
+    \item the same thread that wrote \code{W} does some number of atomic writes onto \code{x} and is then read (in which case it would synchronize with the original operation \code{W}),
+    \item or there is a sequence of atomic RMW operations performed by any thread on \code{x} where each RMW reads the value written by the previous (similarly, it would synchronize with the original operation \code{W}).
+\end {enumerate} 
+\end{definition}
+\begin{itemize}
+    \item Much of the nuance in the above definition comes from "suitably-tagged", as the C++ memory model allows you to define how strictly to enforce memory ordering.
+\end{itemize}
+\begin{definition}[Happens-before]
+Specifies which operations see the effects of other operations. An operation A happens before B iff:
+\begin{enumerate}
+    \item \textbf{Sequenced-before}: A and B are on the same thread, and A comes before B in code.
+    \item \textbf{Synchronizes-with}: A release-stores in thread 1, and B acquire-loads in thread 2 the value that A wrote.
+    \item \textbf{Transitivity}: if A happens-before X, and X happens-before B, then A happens-before B.
+\end{enumerate}
+In general, if two operations occur in the same statement, there is no happens-before relationship between them and they are unordered. 
+\end{definition}
+\begin{itemize}
+    \item C++ has 6 memory ordering options, however they correspond to three models: sequentially consistent ordering, acquire-release ordering, and relaxed ordering.
+\end{itemize}
+\subsubsection{Sequentially consistent ordering}
+\begin{itemize}
+    \item Default ordering: implies that the behaviour of the program is consistent with a sequetial view.
+    \item Behaviour of a sequentially consistent multithreaded program is the exact same as if it were to be ran on a single thread.
+    \item In terms of synchronization, sequentially consistent ordering enforces a two-way ordering: Consider a store that is synchronzied with a load on a different thread. Any sequentially consistent operation done after the load must also appear after the store.
+    \item On more weakly-ordered architectures (such as ARM), sequentially consistent ordering may impose a noticable performance penalty.
+\newpage
+\begin{cppcode}
+#include <atomic>
+#include <thread>
+#include <assert.h>
+std::atomic<bool> x, y;
+std::atomic<int> z;
+void write_x() {
+    x.store(true, std::memory_order_seq_cst); //t_1 // equivalent to x.store(true);
+}
+void write_y() {
+    y.store(true, std::memory_order_seq_cst); // t_2
+}
+void read_x_then_y() {
+    while (!x.load(std::memory_order_seq_cst));
+    if (y.load(std::memory_order_seq_cst)) ++z; // t_3
+}
+void read_y_then_x() {
+    while (!y.load(std::memory_order_seq_cst));
+    if (x.load(std::memory_order_seq_cst)) ++z; // t_4
+}
+int main() {
+    x = false;
+    y = false;
+    z = 0;
+    std::thread a{write_x};
+    std::thread b{write_y};
+    std::thread c{read_x_then_y};
+    std::thread d{read_y_then_x};
+    a.join();
+    b.join();
+    c.join();
+    d.join();
+    assert(z.load() >= 1);// this will never fail
+}
+\end{cppcode}
+    \item In this case, we have that the writes to x and y must appear (in some order) before any reads to x and y appear. Note that the specific ordering of the reads/writes themselves is not enforced. Proof:
+\end{itemize}
+Assume $z = 0$. This means that neither thread C nor D incremented $z$, thus:
+\begin{center}
+Thread C saw $ y == $ false at $t_3$, \\
+Thread D saw $x ==$ false at $t_4$. \\
+\end{center}
+Since thread C exited the spin loop, it observed $x ==$ true. By sequentially consistent ordering,
+\begin{center}
+$t_1\prec t_3$, \\
+$t_2\prec t_4$\\
+\end{center}
+By definition, sequentially consistent ordering guarantees a strict total order $\prec$ over all atomics. thus, the stores at $t_1$ and $t_2$ must be totally ordered, so either:\\
+\textbf{Case 1:} $t_1\prec t_2$
+Then, since $t_2\prec t_4$,
+\begin{center}
+$t_1\prec t_2\prec t_4$ by transitivity.\\
+\end{center}
+Since at $t_4$ both $t_1$ and $t_2$ occured, thread D could not have failed the if check, which is a contradiction.\\
+\textbf{Case 2:} $t_2\prec t_1$
+Then, since $t_1\prec t_3$,
+\begin{center}
+$t_2\prec t_1\prec t_3$ by transitivity.\\
+\end{center}
+Since at $t_3$ both $t_1$ and $t_2$ occured, thread C could not have failed the if check, which is a contradiction.
+Since both yield a contradiction, $z = 0$ must be false.
+\begin{center}
+$\therefore z\neq 0$.
+\end{center}
+\subsubsection{Relaxed ordering}
+\begin{itemize}
+    \item Operations on atomic tyes with relaxed ordering do not particiapte in synchronizes-with relationships. Operations on the same variable within one thread will still respect happens-before, but there is almost no requirements on ordering relative to other threads.
+\end{itemize}
+\begin{cppcode}
+#include <atomic>
+#include <thread>
+#include <assert.h>
+std::atomic<bool> x, y;
+std::atomic<int> z;
+void write_x_then_y() {
+    x.store(true, std::memory_order_relaxed);
+    y.store(true, std::memory_order_relaxed);
+}
+void read_y_then_x() {
+    while (!y.load(std::memory_order_relaxed));
+    if (x.load(std::memory_order_relaxed)) ++z;
+}
+int main() {
+    x = false;
+    y = false;
+    z = 0;
+    std::thread a{write_x_then_y};
+    std::thread b{read_y_then_x};
+    assert(z.load() >= 1);
+}
+\end{cppcode}
+\begin{itemize}
+    \item This assertion may or may not fire, as the ordering: y stores true, b sees y = true, b sees x = false, x stores true.
 \end{itemize}
 \end{document}
