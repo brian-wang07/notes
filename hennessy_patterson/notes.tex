@@ -1,0 +1,258 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Encoding & fonts ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+
+% ── Hyperlinks & auto-updating TOC ────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}   % hidelinks = no ugly red boxes
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{enumitem}              % tighter lists
+\usepackage{parskip}               % space between paragraphs instead of indent
+
+% ── Theorem-like environments (optional, delete if not needed) ─────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+%tikz
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+
+
+% Code blocks
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+}
+
+\lstnewenvironment{cppcode}[1][]{\lstset{language=C++, #1}}{}
+\lstnewenvironment{pycode}[1][]{\lstset{language=Python, #1}}{}
+\lstnewenvironment{ccode}[1][]{\lstset{language=C, #1}}{}
+\lstnewenvironment{bashcode}[1][]{\lstset{language=bash, #1}}{}
+\newcommand{\code}[1]{\lstinline|#1|}
+
+% ── Chapters & appendices in any order ────────────────────────────────────────
+% \chap{<n>}{Title}, \app{<n>}{Title} (1=A, 2=B, ...)
+\newcommand{\chap}[2]{%
+  \renewcommand{\thesection}{\arabic{section}}%
+  \renewcommand{\theHsection}{chap.\arabic{section}}%
+  \setcounter{section}{#1}\addtocounter{section}{-1}%
+  \section{#2}}
+\newcommand{\app}[2]{%
+  \renewcommand{\thesection}{\Alph{section}}%
+  \renewcommand{\theHsection}{app.\Alph{section}}%
+  \setcounter{section}{#1}\addtocounter{section}{-1}%
+  \section{#2}}
+
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{Computer Architecture: A Quantitative Approach}
+\author{Hennessy \& Patterson}
+\date{\today}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents          % auto-updates on every compile (needs 2 passes)
+Order: Ch1, Appendix A, Appendix C, Appendix B, Ch2, Ch3, Ch5, Ch4, Ch7, Ch6
+\newpage
+\chap{1}{Fundamentals of Quantitative Design and Analysis}
+\subsection{Introduction}
+\begin{itemize}
+    \item RISC - Reduced Instruction Set Computer was introduced in the early 1980s, with the aim of simplifying architectures to keep up with the rapid development the hardware.
+    \item Utilized instruction level parallelism (initially with pipelining) and the use of caches.
+    \item ARM became dominant in the late 90s as a RISC architecture, specifically for low-end power and cost sensitive applications.
+\end{itemize}
+\subsection{Classes of Computers}
+\begin{itemize}
+    \item There exist two main types of parallelism:
+    \begin{enumerate}
+        \item Data level parallelism (DLP) when there are many data items that may be parallelized.
+        \item Task level parallelism (TLP) when larger tasks can operate independent of each other and may be parallelized.
+    \end{enumerate}
+    \item Hardware can then exploit these types of parallelism in four ways:
+    \begin{enumerate}
+        \item Instruction-level Parallelism (ILP) exploits DLP with the help of the compiler with ideas like pipelining and speculation.
+        \item Vector Architectures and Graphic Processing Units (GPUs) exploit DLP by applying a single instruction to multiple pieces of data in parallel.
+        \item Thread-Level Parallelism exploits either DLP or TLP in a specific hardware model that allows faster and efficient communication between threads
+        \item Request-Level Parallelism exploits TLP as specified by the OS or programmer.
+    \end{enumerate}
+    \item Michael Flynn in the 60s all computers one of the following four categories sorted by parallelism in the instruction and data streams:
+    \begin{enumerate}
+        \item \textit{Single instruction, single data} (SISD) - A uniprocessor. Instructions are executed sequentially, but can still exploit ILP.
+        \item \textit{Single instruction, multiple data} (SIMD) - There are multiple processors with independent data streams executing the same instruction in parallel. Each processor has its own data memory but they share the same instruction memory.
+        \item \textit{Multiple instruction, single data} (MISD) - Doesnt really exist
+        \item \textit{Multiple instruction, multiple data} (MIMD) - Targets TLP as each processor can fetch their own instructions and data. Generally more flexible and applicable than SIMD, but is inherently more expensive.
+    \end{enumerate}
+\end{itemize}
+\subsection{Defining Computer Architecture}
+\begin{itemize}
+    \item Instruction set architecture (ISA): the set of instructions for the computer that are visible to the programmer. It serves as the boundary between software and hardware.
+    \begin{enumerate}
+        \item Class of ISA: Nearly all modern ISAs operate on registers or memory locations. 80x86 has 16 general-purpose regs and 16 floating-point regs, whereas MIPS has 32 of each.
+        \begin{itemize}
+            \item Register-memory ISA: Can access memory with a variety of instructions (eg 80x86)
+            \item Load-store ISA: Can only access memory via load/store instructions (eg ARM and MIPS)
+        \end{itemize}
+        \item Memory addressing: Nearly all architectures use byte addressing to identify memory locations. Some architectures require an address to be aligned to a certain multiple (like ARM or MIPS) while others do not, but may have a performance cost.
+        \item Addressing modes: 
+        \begin{itemize}
+            \item MIPS: Register, Immediate (constant only), Displacement
+            \item 80x86: Same with three variants of displacement - no register (absolute), two registers (based indexed with displacement), and two registers (based with scaled index and displacement) 
+            \item ARM: Same as MIPS plus PC-relative addressing, sum of two registers, and the sum of two registers where one register is multiplied by the size of the operand in bytes.
+        \end{itemize}
+        \item Types and sizes of operands: All 3 support operands sizes of 8-bit ascii, 16-bit unicode/half-word, 32-bit integer/word, 64-bit double word/long, 32-bit IEEE 754 floating point @ single precision, and 64-bit IEEE 754 floating point @ double precision. 80x86 also supports 80-bit extended floating point @ extended double precision.
+        \item Operations: Categories include data transfer, arithmetic logical, control, and floating point.
+        \item Control flow operations: Nearly all ISAs support conditional branching, unconditional jumps, procedure calls, and returns. Address is relative to program counter (PC). 
+        \item Encoding an ISA: fixed length (eg ARM and MIPS, all instructions are 32 bits long) or variable length (eg 80x86, instructions are 1-18 bytes long). Variable length binaries tend to be smaller as instructions can be packed together more.
+    \end{enumerate}
+    \item Organization (or microarchitecture) refers to the high-level abstracted representation of a computer's design, such as the memory system, memory interconnect, and the design of the internal processor or CPU. 
+    \item Two processors may implement the same ISA but have different organizations (eg AMD Opteron vs Intel Core i7).
+    \item The hardware is the lower level specifics of a computer. 
+    \item Two processors may implement the same ISA and organization but vary in physical hardware (eg Intel Core i7 vs Intel Xeon 7560).
+    \item \textit{Architecture} is an overarching term that refers to the instruction set architecture, organization/microarchitecture, and hardware.
+\end{itemize}
+\subsection{Trends in Technology}
+\begin{itemize}
+    \item Well-designed ISAs are created with the intention to survive more rapid changes in technology. 
+    \begin{enumerate}
+        \item Integrated circuit logic technology: Transistor density (historically) has increased by 35\% each year, approximatley quadrupling over 4 years. Increases in die size range from 10\%-20\%, and the transistor count on a chip doubles every approx. 18-24 months (Moore's law)
+        \item Semiconductor DRAM: Capacity per DRAM chip has increased by 25\%-40\% each year. This is slowing down however due to the difficulty of efficiently manufacturing small DRAM cellls.
+        \item Semiconductor flash (electrically erasable programable read-only memory): Capacity per flash chip has increased ~50\%-60\% per year recently, and is 15-20 times cheaper than DRAM.
+        \item Magnetic disk technology: Density has increased ~40\% per year since 2004. 15-25 times cheaper than flash and 300-500 times cheaper than DRAM, per bit.
+        \item Network technology: Depends both on the performance of switches and the performance of the transmission system (hard to estimate)
+    \end{enumerate}
+    \item Bandwidth or Throughput: total amount of work done in a given time
+    \item Latency or Response Time: Time between start and completion of a given task
+    \item Generally, bandwidth outpaces latency improvements; generally bandwidth grows by at least the square of latency.
+    \item Feature Size: minimum size of a transistor in either dimension. 
+    \item Density of transistors increases quadratically wrt. a decrease in feature size
+    \item Generally, transistor performance increases linearlly wrt. a decrease in feature size
+    \item As feature size shrinks, however, wire performance degrades as they get shorter and the resistance and capacitance per unit length gets worse.
+\end{itemize}
+\subsection{Trends in Power and Energy in Integrated Circuits}
+\begin{itemize}
+    \item Three primary concerns from the perspective of a system designer:
+    \begin{enumerate}
+        \item What is the maximum power a processor requires?
+        \item What is the sustained power consumption? Quantified via thermal design power (TDP), which determines the cooling requirement. Peak power is approx. 1.5 times TDP
+        \item Energy efficiency
+    \end{enumerate}
+    \item Dynamic energy: energy required to switch a transistor in CMOS chips.
+\end{itemize}
+\begin{align*}
+    \text{Energy}_{\text{dynamic}} \propto \text{Capacitive Load} \times \text{Voltage}^2
+\end{align*}
+Represents the energy pulse of the transition of 0$\rightarrow$1$\rightarrow$0 (or 1$\rightarrow$0$\rightarrow$1). Thus the energy of a single transition is then
+\begin{align*}
+    \text{Energy}_{\text{dynamic}} &\propto \frac{1}{2} \times \text{Capacitive Load} \times \text{Voltage}^2, \\
+    \text{Power}_{\text{dynamic}} &\propto \frac{1}{2} \times \text{Capacitive Load} \times \text{Voltage}^2 \times \text{Frequency Switched}
+\end{align*}
+\begin{itemize}
+    \item As technology evolves the increase of the number of transistors and frequency makes the decrease of load capacitance and voltage negligable, creating an overall increase of power consumption.
+    \item Early microprocessors used $<1$ watt; modern processors consume on the order of 100s of watts.
+    \item Power consumption has largely plateaued, as the issue of cooling the chips and preventing hot spots becomes increasingly more difficult.
+    \item Various techniques exist to try and improve efficiency:
+    \begin{enumerate}
+        \item Do nothing: Turn off the clock on certain inactive modules
+        \item Dynamic Voltage-Frequency Scaling (DVFS): When not operating at full capacity the clock rate will be lowered.
+        \item Overclocking: Newer processors may allow certain cores to be able to operate at higher clock speeds for short periods of time, before having to cool off.
+    \end{enumerate}
+\end{itemize}
+\subsection{Trends in Cost}
+\begin{itemize}
+    \item While the cost of manufacturing an IC has decreased dramatically, the overall process has not changed: a wafer gets tested and cut into dies. 
+    \item Die yield: the fraction of good dies on a wafer relative to total dies. Empirically,
+\end{itemize}
+\begin{align*}
+    \text{Die Yield} = \text{Wafer Yield} \times \frac{1}{(1+\text{Defects per Unit Area} \times \text{Die Area})^N}
+\end{align*}
+\begin{itemize}
+    \item Wafer yield refers to the number of dies that are so bad they need not be tested; for simplicity this can be assumed to be \textasciitilde$100\%$.
+    \item In 2010, Defects per unit area was reported to be 0.016-0.057 defects per square centimeter.
+    \item $N$ is called the process-complexity factor, a measure of manufacturing difficulty. for 40 nm in 2010, this ranged from 11.5-15.5.
+    \item To accomodate inevitable defects in manufacturing, many designers introduce redundant cells in the dies such that small defects still yield a functional die. This significantly increases the yield.
+\end{itemize}
+\subsection{Dependability}
+\begin{itemize}
+    \item Historically, ICs have been one of, if not the most reliable part of a computer. 
+    \item While pins may be fragile the overall error rate inside the chip is very low.
+    \item Service Level Agreement/Service Level Objective (SLA/SLO): A guarantee given by an infrastructure provider that their service would be dependable. 
+    \item Two states: Service Accomplishment (delivered as specified) or Interruption (different from SLA). 
+\end{itemize}
+\subsection{Measuring, Reporting, and Summarizing Performance}
+\subsection{Quantitative Principles of Computer Design}
+\begin{itemize}
+    \item Take advantage of parallelism: various techniques exist at different scales where tasks and/or data can be parallelized.
+    \begin{itemize}
+        \item System level: Consider a web service; the handling of mulitple requests can be spread out across multiple processors to improve throughput. 
+        \item Single processor: Pipelining is when the processor will overlap one instruction while an earlier one is being executed to reduce the wait time between them. The key insight is that not every instruction depends on the previous one, so executing instructions partially or fully in parallel may be possible.
+        \item Digital design: Modern ALUs use carry-lookahead, which use parallelism to speed the process of computing sums from linear to logarithmic to the number of bits.
+    \end{itemize}
+    \item Principle of Locality: Keep things that are used often close.
+    \begin{itemize}
+        \item As a rule of thumb, a program will spend 90\% of its runtime on just 10\% of the code.
+        \item Based off of this we can predict what data and instructions a program will use based off of what the program has already done.
+        \item Temporal locality: recently accessed items are more likely to be accessed again in the future.
+        \item Spacial locality: items with similar addresses tend to be referenced close together in time.
+    \end{itemize}
+\end{itemize}
+\subsubsection{Amdahl's Law}
+Amdahl's Law defines the speedup that can be gained by a particular feature.
+\begin{align*}
+    \text{Speedup} = \frac{\text{Performance for entire task using enhancement when possible}}{\text{Performance for entire task without using the enhancement}}
+\end{align*}
+As well,
+\begin{align*}
+    \text{Execution Time}_\text{new} = \text{Execution Time}_\text{old}\times ((1-\text{Fraction}_\text{enhanced})+\frac{\text{Fraction}_\text{enhanced}}{\text{Speedup}_\text{enhanced}})
+\end{align*}
+Where $\text{Fraction}_\text{enhanced}$ is the fraction of the program that benefits from the enhancement, and $\text{Speedup}_\text{enhanced}$ represents how much faster said portion of the program is. Thus, the overall speedup ratio is then
+\begin{align*}
+    \text{Speedup}_\text{overall} = \frac{\text{Execution Time}_\text{old}}{\text{Execution Time}_\text{new}}=\frac{1}{(1-\text{Fraction}_\text{enhanced})+\frac{\text{Fraction}_\text{enhanced}}{\text{Speedup}_\text{enhanced}}}
+\end{align*}
+\newpage
+\app{1}{Appendix A: Instruction Set Principles}
+\subsection{Introduction}
+\subsection{Classifying Instruction Set Architectures}
+\begin{itemize}
+    \item Main types of internal storage:
+    \begin{enumerate}
+        \item Stack: Operands are implicitly on top of the stack
+        \item Accumulator: One operand is implicitly on top of the accumulator
+        \item General-purpose register: Only explicit operands
+    \end{enumerate}
+    \item Consider the expression \texttt{C = A + B}:
+\end{itemize}
+\begin{center}
+\begin{tabular}{c c c c}
+\hline
+Stack & Accumulator & Register-memory & Register (load-store) \\
+    
+\end{tabular}
+\end{center}
+\end{document}
