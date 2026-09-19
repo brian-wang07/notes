@@ -1,0 +1,248 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Encoding & fonts ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+
+% ── Hyperlinks & auto-updating TOC ────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}   % hidelinks = no ugly red boxes
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{tabularx}              % equal-width wrapping columns
+\usepackage{enumitem}              % tighter lists
+\usepackage{parskip}               % space between paragraphs instead of indent
+
+% ── Theorem-like environments (optional, delete if not needed) ─────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+%tikz
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+
+
+% Code blocks
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+}
+
+\lstnewenvironment{cppcode}[1][]{\lstset{language=C++, #1}}{}
+\lstnewenvironment{pycode}[1][]{\lstset{language=Python, #1}}{}
+\lstnewenvironment{ccode}[1][]{\lstset{language=C, #1}}{}
+\lstnewenvironment{bashcode}[1][]{\lstset{language=bash, #1}}{}
+\newcommand{\code}[1]{\lstinline|#1|}
+
+% ── Chapters & appendices in any order ────────────────────────────────────────
+% \chap{<n>}{Title}, \app{<n>}{Title} (1=A, 2=B, ...)
+\newcommand{\chap}[2]{%
+  \renewcommand{\thesection}{\arabic{section}}%
+  \renewcommand{\theHsection}{chap.\arabic{section}}%
+  \setcounter{section}{#1}\addtocounter{section}{-1}%
+  \section{#2}}
+\newcommand{\app}[2]{%
+  \renewcommand{\thesection}{\Alph{section}}%
+  \renewcommand{\theHsection}{app.\Alph{section}}%
+  \setcounter{section}{#1}\addtocounter{section}{-1}%
+  \section{#2}}
+
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{Operating Systems: Three Easy Pieces}
+\author{Andrea and Remzi Arpaci-Dusseau}
+\date{\today}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents          % auto-updates on every compile (needs 2 passes)
+Order:  5, 6, 13, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
+\newpage
+\subsection{Introduction to Operating Systems}
+\begin{itemize}
+  \item Crux of the problem: How does the operating system virtualize resources?
+  \begin{itemize}
+    \item What mechanisms and policies are implemented by the OS to attain virtualization?
+    \item How does the OS do this efficiently?
+    \item What hardware support is needed?
+  \end{itemize}
+  \begin{definition}[Virtualization]
+    The process in which the operating system takes a physical resource and abstracts it into an easier-to-use virtual form.
+  \end{definition}
+  \begin{definition}[System call]
+    An interface or API exposed to the user to tell the OS what to do. A typical OS will export on the order of hundreds of system calls (syscall) 
+  \end{definition}
+  \item The OS is also responsible for managing resources, each of the CPU, memory, and disk.
+\end{itemize}
+\begin{ccode}
+int main(int argc, char *argv[]) {
+  if (argc != 2) { 
+    fprintf(stderr, "usage: cpu <string>\n");
+    exit(1);
+  }
+  char *str = argv[1];
+  for (;;) {
+    Spin(1);
+    printf("%s\n", str);
+  }
+  return 0;
+}
+\end{ccode}
+\begin{itemize}
+  \item The above code will simply just print the string that the user passed, forever. 
+  \item Interestingly though, even on a single core system we can run this program in parallel and all programs will run at the same time.
+  \item The OS will virtualize each physical CPU into a seemingly infinite number of virtual CPUs, giving the illusion as if there are more than one.
+  \item The OS policies defines the behaviour of the OS, including things like what programs get priority and what actions are permitted. 
+  \item A similar idea is applied with memory: memory is just an array of bytes. 
+  \item To read/write to memory, one needs to supply the address of whatever you want to access. 
+  \item Consider a program that allocates some memory, prints the address of the memory \texttt{p} and writes the number 0 into the first slot of the allocated memory. Finally it loops and increments the value stored at the address held in \texttt{p}. 
+  \item Similar to the example from before, if we run multiple instances of this program, then each instance will have allocated memory at the exact same address and each are updating the value at that address independently. 
+  \item This is an example of the OS virtualizing memory; each process has it's own private virtual address space. 
+  \item It is the OS's responsibility to map the virtual memory of each process to some portion of physical memory.
+  \item Persistence: The OS is also responsible for ensuring that data that is stored in a volatile manner (such as DRAM) is not lost when power is lost or the system crashes. This is done through the usage of input/output, or I/O devices.
+  \item Common IO devices in modern computers are hard drives or SSDs.
+  \item Unlike the abstractions the OS performs on the physical CPU(s) and memory, there is no virtualization performed for each application. 
+  \item It is assumed that the user wants to share the contents of a file; one application may be used to create and edit a file and another to compile. 
+  \item The software that is responsible for managing and storing files on the disk is called the file system.
+\end{itemize}
+\newpage
+\chap{4}{The Abstraction: The Process}
+\begin{itemize}
+  \item The crux of the problem: How to provide the illusion of many CPUs? In a system where there are only a few physical CPUs available, how can the OS provide the illusion of a nearly-endless supply of CPUs?
+  \item The basic idea is simple: On a given CPU, the OS wil run one process, then stop it to run another process, and so on. This is known as \textbf{Time sharing}.
+  \item Using this the OS can provide the illusion that one CPU is running multiple processes, at the cost of slower performance the more processes need to be shared on one CPU.
+  \item Mechanisms: low-level methods or protocols that implement functionality.
+  \item Policies: higher-level algorithms that are responsible for making some kind of decision within an OS. 
+  \item A process at a given time can affect the memory that is reserved for it (its address space), as well as registers. 
+  \item Special registers include the Program Counter/Instruction pointer (PC/IP), which tells what the next instruction to be executed is and a stack pointer is used to manage the stack for function parameters, local variables and return values. 
+  \item Programs may also affect persistent storage devices as well. 
+  \item The OS must expose the following APIs for processes:
+  \begin{enumerate}
+    \item Create: An OS must be able to create a new process. 
+    \item Destroy: An OS must be able to destroy an existing process. 
+    \item Wait: It is sometimes useful to wait for a specific process to stop 
+    \item Misc. control: Some way to temporarily halt and resume a process 
+    \item Status: Read-only APIs that give status info or some other pieces of metadata on a process.
+  \end{enumerate}
+\end{itemize}
+\subsection{Process Creation}
+\begin{itemize}
+  \item The first thing the OS does is load the program code and any static data into memory (the address space of the process)
+  \item This is done lazily; the OS will only fetch pieces of code or data that is necessary (opposed to eagerly). This is done to further support paging and swapping. 
+  \item The OS then allocates memory on the program's stack as well as the heap. 
+  \item It will then perform any remaining initialization tasks, such as those pertaining to IO. The OS then transfers control of the CPU to the newly-created process. 
+\end{itemize}
+\subsection{Process States}
+In a simplified view, a process can be in one of three states:
+\begin{enumerate}
+  \item Running: The process is currently being executed. 
+  \item Ready: A process is ready to run but is not currently being executed for some reason from the OS. 
+  \item Blocked: A process has performed some operation in which it needs to wait for in order to proceed. An example is an IO request, in which the process needs to wait for the data to be fetched and is thus blocked; in the meantime some other process is free to use the processor.
+\end{enumerate}
+
+
+\begin{center}
+\begin{tikzpicture}[
+    state/.style = {circle, draw, minimum size=17mm, align=center},
+    every edge/.style = {draw, -{Stealth[length=2.5mm]}},
+    lbl/.style = {font=\small}
+  ]
+  % nodes at explicit coordinates (in cm) so Blocked sits centred below the pair
+  \node[state] (running) at (0, 0)    {Running};
+  \node[state] (ready)   at (6, 0)    {Ready};
+  \node[state] (blocked) at (3, -3.2) {Blocked};
+
+  % edges: label side is chosen by auto / auto+swap so nothing overlaps a line
+  \path (running) edge [bend left=12] node[lbl, above]      {Descheduled}   (ready);
+  \path (ready)   edge [bend left=12] node[lbl, below]      {Scheduled}     (running);
+  \path (running) edge                node[lbl, auto, swap] {I/O: initiate} (blocked);
+  \path (blocked) edge                node[lbl, auto, swap] {I/O: done}     (ready);
+\end{tikzpicture}
+\end{center}
+Below is an example for how two processes may transition through some of the states as shown in the diagram above:
+\begin{center}
+\begin{tabular}{c c c c}
+\textbf{Time} & $\textbf{Process}_0$ & $\textbf{Process}_1$ & \textbf{Notes} \\
+\hline
+1  & Running & Ready   &                                    \\
+2  & Running & Ready   &                                    \\
+3  & Running & Ready   & $\text{Process}_0$ initiates I/O   \\
+4  & Blocked & Running & $\text{Process}_0$ is blocked,     \\
+5  & Blocked & Running & so $\text{Process}_1$ runs         \\
+6  & Blocked & Running &                                    \\
+7  & Ready   & Running & I/O done                           \\
+8  & Ready   & Running & $\text{Process}_1$ now done        \\
+9  & Running & --      &                                    \\
+10 & Running & --      & $\text{Process}_0$ now done        \\
+\end{tabular}
+\end{center}
+\subsection{Data Structures}
+\begin{itemize}
+  \item The process list will contain all processes that are ready and some extra information for what processes are currently running. 
+  \item The OS must also keep track of blocked processes. 
+  \item The register context will hold the contents of the registers of a stopped process. The registers of a stopped process are written to memory, and are restored when the process resumes. 
+\end{itemize}
+Below is an example of some data structures used in the xv6 kernel:
+\newpage
+\begin{ccode}
+// the registers will save and restore to stop and restart a process 
+struct context {
+  int eip;
+  int esp;
+  int ebx;
+  int ecx;
+  int edx;
+  int esi;
+  int edi;
+  int edp;
+};
+
+// the possible states a process can be in:
+enum proc_state { UNUSED, EMBRYO, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+
+// the information xv6 tracks about each process 
+struct proc {
+  char *mem; //start of process memory
+  uint sz;
+  char *kstack; // bottom of kernel stack for this process
+  enum proc_state state;
+  int pid;
+  struct proc *parent;
+  void *chan; // !zero -> sleeping on chan 
+  int killed; // !zero -> killed 
+  struct file *ofile[NOFILE]; // open files 
+  struct inode *cwd; 
+  struct context context;
+  struct trapframe *tf;
+}
+\end{ccode}
+As seen above there are more states that a process can be in than the three listed; 
+\begin{itemize}
+  \item An initial state for when it is being created 
+  \item A final state where it has exited but has not yet been cleaned up (zombie)
+\end{itemize}
+\end{document}
