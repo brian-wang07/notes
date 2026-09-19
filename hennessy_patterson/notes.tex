@@ -15,6 +15,7 @@
 \usepackage{amsmath, amssymb, amsthm}
 
 % ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{tabularx}              % equal-width wrapping columns
 \usepackage{enumitem}              % tighter lists
 \usepackage{parskip}               % space between paragraphs instead of indent
 
@@ -252,7 +253,70 @@ Where $\text{Fraction}_\text{enhanced}$ is the fraction of the program that bene
 \begin{tabular}{c c c c}
 \hline
 Stack & Accumulator & Register-memory & Register (load-store) \\
-    
+\hline 
+\hline 
+\texttt{Push A}&\texttt{Load B}&\texttt{Load R1,A}&\texttt{Load R1,A}\\
+\hline
+\texttt{Push B}&\texttt{Add B}&\texttt{Add R1,B}&\texttt{Load R2,B}\\
+\hline 
+\texttt{Add}&\texttt{Store C}&\texttt{Store R1,C}&\texttt{Add R3,R1,R2}\\
+\hline
+\texttt{Pop C}&&&\texttt{Store R3,C}\\
+\hline
 \end{tabular}
+\end{center}
+\begin{itemize}
+  \item Types of GPR architectures:
+  \item Register-register (load/store): arithmetic operations can only operate on registers; memory is fetched through load/store operations. Takes 0-3 operands. Very fast and low CPI. (eg RISC)
+  \item Register-memory: arithmetic operations can have one register and one memory operand. Takes 0-2 operands. Higher CPI, but code density is much higher than register-register.
+  \item Memory-memory: arithmetic operations can fetch both operands from memory. Much slower and pipelining is nearly impossible as memory ops can stall. Essentially extinct in modern day architectures
+\end{itemize}
+\subsection{Memory Addressing}
+\begin{itemize}
+  \item Big endian vs little endian: Consider the number \texttt{0x12345678}. If we were to store this in address \texttt{0x00}:
+\end{itemize}
+\begin{center}
+\begin{tabular} {c c c}
+\hline 
+Memory Address & Big Endian & Little Endian \\
+\hline 
+\hline 
+0x00 & 12 (MSB) & 78 (LSB) \\
+0x01 & 34 & 56 \\
+0x02 & 56 & 34 \\ 
+0x03 & 78 & 12 \\
+\hline
+\end{tabular}
+\end{center}
+\begin{itemize}
+  \item Note that endianess does not affect the order of the bits themselves, but the bytes.
+  \item Big endian is easier to read (follows left $\rightarrow$ right), but little endian is a little easier for the processor as the ALU processes bytes from LSB $\rightarrow$ MSB. Sign checking is also easier on little endian.
+  \item CPUs will fetch memory in units known as words. If an object is in a misaligned memory address (an access to a object of size $s$ bytes with byte address $A$ where $A$ mod $s \neq 0$) will require multiple aligned memory accesses.
+  \item Addressing mode: How architectures specify the address of an object they will access. The address specified by the mode is called the effective address.
+\end{itemize}
+\begin{center}
+% \hsize factors must sum to 4 (the number of X columns); the stretchy
+% \extracolsep soaks up rounding error that otherwise causes an underfull hbox
+\begin{tabularx}{\textwidth}{@{\hspace{\tabcolsep}\extracolsep{0pt plus 1fil}}>{\centering\arraybackslash\hsize=0.8\hsize}X
+                             >{\centering\arraybackslash\hsize=0.8\hsize}X
+                             >{\centering\arraybackslash\hsize=1.6\hsize}X
+                             >{\centering\arraybackslash\hsize=0.8\hsize}X}
+\hline
+Addressing Mode & Example Instruction & Meaning & When Used \\
+\hline 
+\hline 
+Register & \texttt{Add R3,R4} & \texttt{Regs[R4]} $\leftarrow$ \texttt{Regs[R4] + Regs[R3]} & When a value is in a register \\ 
+\hline
+Immediate & \texttt{Add R4,\#3} & \texttt{Regs[R4]} $\leftarrow$ \texttt{Regs[R4] + 3} & When a value is a constant \\ 
+\hline
+Displacement & \texttt{Add R4,100(R1)} & \texttt{Regs[R4]} $\leftarrow$ \texttt{Regs[R4] + Mem[100 + Regs[R1]]} & Accessing local variables\\ 
+\hline
+Register indirect & \texttt{Add R4,(R1)} & \texttt{Regs[R4]} $\leftarrow$ \texttt{Regs[R4] + Mem[Regs[R1]]} & Access through a pointer\\ 
+\hline
+Indexed & \texttt{Add R3,(R1+R2)} & \texttt{Regs[R3]} $\leftarrow$ \texttt{Mem[Regs[R1] + Regs[R2]]} & Pointer arithmetic\\ 
+\hline
+Direct/absolute & \texttt{Add R1,(1001)} & \texttt{Regs[R1]} $\leftarrow$ \texttt{Regs[R1] + Mem[1001]} & Static data access\\ 
+\hline
+\end{tabularx}
 \end{center}
 \end{document}
