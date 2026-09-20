@@ -313,10 +313,84 @@ Displacement & \texttt{Add R4,100(R1)} & \texttt{Regs[R4]} $\leftarrow$ \texttt{
 \hline
 Register indirect & \texttt{Add R4,(R1)} & \texttt{Regs[R4]} $\leftarrow$ \texttt{Regs[R4] + Mem[Regs[R1]]} & Access through a pointer\\ 
 \hline
-Indexed & \texttt{Add R3,(R1+R2)} & \texttt{Regs[R3]} $\leftarrow$ \texttt{Mem[Regs[R1] + Regs[R2]]} & Pointer arithmetic\\ 
+Indexed & \texttt{Add R3,(R1+R2)} & \texttt{Regs[R3]} $\leftarrow$ \texttt{Mem[Regs[R1] + Regs[R2]]} & Array indexing\\ 
 \hline
 Direct/absolute & \texttt{Add R1,(1001)} & \texttt{Regs[R1]} $\leftarrow$ \texttt{Regs[R1] + Mem[1001]} & Static data access\\ 
 \hline
 \end{tabularx}
 \end{center}
+\subsection{Types and Sizes of Operands}
+\begin{itemize}
+  \item Generally, the type of an operand (integer, single-precision floating point, char, etc) determines the size of the operand.
+  \item Integers are almost always represented as twos-compliment binary numbers.
+  \item Twos compliment: negative numbers are represented by inverting all bits and adding 1 (MSB becomes sign bit)
+  \item Some architectures may also represent the operands as decimal values, since certain decimal fractions (like 0.1) do not have a binary representation.
+\end{itemize}
+\subsection{Operations in the Instruction Set}
+\begin{center}
+\begin{tabularx}{\textwidth}{l X}
+\hline
+\textbf{Operator Type} & \textbf{Examples} \\ 
+\hline
+Arithmetic and logical & Integer operations: add, subtract, and, or, multiply, divide, etc. \\
+\hline 
+Data transfer & Loads and stores (mov instructions on architectures with memory addressing) \\
+\hline 
+Control & Branch, jump, procedure call and return, traps \\
+\hline 
+System & syscall, virtual memory management instructions \\ 
+\hline 
+Floating-point & Floating-point operations: add, multiply, divide, compare \\ 
+\hline 
+Decimal & Decimal add, multiply, decimal->char conversion \\
+\hline 
+String & String move, cmp, search \\ 
+\hline
+Graphics & Pixel and vertex, compression/decompression operations \\
+\hline
+\end{tabularx}
+\end{center}
+\begin{itemize}
+  \item The first 4 (Arithmetic, and logical, data transfer, control, and system) are the important ones 
+  \item The top 10 most common instructions are responsible for 96\% of all instructions executed (on 80x86):
+  \item 22\% Load, 20\% Conditional branch, 16\% Compare, 12\% Store  
+\end{itemize}
+\subsection{Instructions for Control Flow}
+\begin{itemize}
+  \item 4 types of control flow change:
+  \begin{enumerate}
+    \item Conditional branch
+    \item Jump 
+    \item Procedure call 
+    \item Procedure return
+  \end{enumerate}
+  \item Majority is Conditional branch (\textasciitilde 80\%)
+\end{itemize}
+\subsubsection{Addressing modes for control flow instructions}
+\begin{itemize}
+  \item The destination address must always be specified.
+  \item In the majority of cases, this is specified explicitly in the instruction
+  \item Procedure return is the main exception, as the return address is not known at compile time (just pop call stack)
+  \item Most common mode is via displacement relative to the program counter (PC). 
+  \item Instructions that address this way are known as pc-relative instructions 
+  \item Advantages are that these instructions take less bytes as the location is close to the current instruction.
+  \item Position independence: PC-relative instructions also allow code to be run independent of the absolute location.
+  \item Position independence helps with linking/dynamic linking.
+  \item When PC-relative addressing is not available, the next best option is usually register indirect.
+  \item This is due to the fact that PC-relative is not possible when the address is not known at compile time. 
+  \item Register-indirect jumps also allow the following:
+  \begin{enumerate}
+    \item Switch-case functions
+    \item Runtime dynamic dispatch
+    \item Function pointers 
+    \item Dynamically shared libraries
+  \end{enumerate}
+\end{itemize}
+\subsubsection{Conditional branch options}
+Below are ways in which conditional branches are evaluated:
+\begin{enumerate}
+  \item Condition code (CC): Branch operations will read specific flags set by the ALU (as a side effect) and branch accordingly. This has the advantage that it may be free as the arithmetic being done may have set the flag already. The disadvantage is that this depends on the state of the ALU flags, and can easily be overwritten restricting reordering of instructions. As well, the outcome is passed through the flags register to the branch, which is implicit (more dependencies for the compiler to consider) and there is usually only one flag register slot. Many modern architectures like x86 intel/amd, aarch64, and powerPC use CC.
+  \item Condition register/limited comparison: A compare instruction will write a result into any GPR, which is then checked against a predicate. This doesn't rely on any flag states and is much simpler for the compiler to reason about. The disadvantage is that some conditions (eg a < b) introduce an extra compare instruction before the branching itself. This introduces a design tension, where either the branch's compare can be trivial (which introduces extra instructions) OR the branch's compare can be more powerful (but affect the critical path).
+  \item Compare and branch: The compare operation is folded into the branch instruction itself, thus no extra instructions/flags are required, at the cost of a more expensive instruction.
+\end{enumerate}
 \end{document}
