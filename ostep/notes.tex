@@ -245,4 +245,24 @@ As seen above there are more states that a process can be in than the three list
   \item An initial state for when it is being created 
   \item A final state where it has exited but has not yet been cleaned up (zombie)
 \end{itemize}
+\newpage
+\chap{5}{Interlude: Process API}
+\subsection{The \texttt{fork()} System Call}
+\begin{ccode}
+int main(int argc, char *argv[]) {
+  printf("hello (pid:%d)\n", (int)getpid());
+  int rc = fork();
+  if (rc < 0) { 
+    fprintf(stderr, "fork failed\n");
+    exit(1);
+  } else if (rc == 0) {
+    // child process 
+    printf("child (pid:%d)\n", (int)getpid());
+  } else {
+    // parent (main) goes here
+    printf("parent of %d (pid:%d)\n", rc, (int)getpid());
+  }
+  return 0;
+}
+\end{ccode}
 \end{document}
