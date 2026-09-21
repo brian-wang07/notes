@@ -262,4 +262,56 @@ See \texttt{p2.c} for an example.
   \item In this example the parent invokes the \texttt{wait()} syscall, which blocks it until the child finishes executing. 
   \item This will ensure that the program is now deterministic, as the child will always print first. 
 \end{itemize}
+\subsection{The \texttt{exec()} System Call}
+See \texttt{p3.c} for an example.
+\begin{itemize}
+  \item On success, \texttt{exec()} doesnt return
+  \item It will take the current process and replaces it with a different executable and starts at \texttt{main()}.
+\end{itemize}
+\subsection{Motivating the API}
+\begin{itemize}
+  \item The seperation between \texttt{fork()} and \texttt{exec()} allows the shell to run code after the \texttt{fork()} but before the \texttt{exec()}.
+  \item This can alter the environment of the program that is to be executed.
+  \item The shell shows a prompt and waits for the user to type a command.
+  \item It then forks a new child process, calls exec to run the program, and waits for the command to finish, in which it prompts the user again.
+  \item The seperation between the fork and exec allows the shell to implement some useful behaviour, including:
+\end{itemize}
+\begin{bashcode}
+prompt> wc p3.c > newfile.txt
+\end{bashcode}
+\begin{itemize}
+  \item The > redirects the output of \texttt{wc p3.c} into \texttt{newfile.txt}. This is done by first forking a new child process and then opening \texttt{newfile.txt} before executing \texttt{wc p3.c}.
+  \item This redirects the output from stdout to \texttt{newfile.txt}. See \texttt{p4.c} for an example.
+  \item \texttt{close()} takes a file descriptor as a parameter, and deallocates it (for whichever process called it). Note that it does not stop/terminate any processes or free PIDs.
+  \item The stdout fd is always 1 (defined via \texttt{STDOUT\_FILENO} and is now free), and \texttt{open()} will always return the lowest fd, which is now set to \texttt{p4.output}.
+  \item \texttt{wc p4.c} then writes to \texttt{p4.output} instead of stdout.
+\end{itemize}
+\begin{center}
+For the child process:
+\begin{tabular}{c c c c c}
+\hline
+& fd 0 & fd 1 & fd 2\\
+\hline
+after \texttt{fork()} & tty & stdout & tty & (copied from parent) \\
+after \texttt{close(1)} & tty & (free) & tty & \\
+after \texttt{open(...)} & tty & \texttt{p4.output} & tty & open returns lowest fd = 1 \\
+\hline
+\end{tabular}
+\end{center}
+\begin{itemize}
+  \item A similar implementation is done for \texttt{pipe()}, which lets you connect the output a process to the kernel pipe (or a queue), which connects to the input of another process. For example,
+\end{itemize}
+\begin{bashcode}
+prompt> grep -o foo file | wc -l
+\end{bashcode}
+\begin{itemize}
+  \item Will get the number of times foo appears in file and pipe it to wc.
+\end{itemize}
+\subsection{Process Control and Users}
+\begin{itemize}
+  \item \texttt{kill()} is used to send signals to a process, including directives to pause, die and other things. 
+  \item On most shells, keystrokes can also send signals (ctrl-c sends SIGINT, graceful termination and ctrl-z sends SIGSTP, which pauses a program and can be resumed with something like \texttt{fg}.)
+  \item A process should also implement the \texttt{signal()} syscall to catch different signals; for example, to cleanup resources when a SIGINT is issued.
+  \item Modern systems require a strong notion of a "user" to ensure that different people have various levels of access to system resources and signals.
+\end{itemize}
 \end{document}

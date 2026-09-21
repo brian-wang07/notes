@@ -7,6 +7,18 @@
 *.synctex.gz
 *.toc
 
-test.cpp
-a
-
+# object files / build output
+*.o
+*.obj
+*.ko
+*.lo
+*.slo
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.d
+*.gch
+*.pch
