@@ -248,21 +248,18 @@ As seen above there are more states that a process can be in than the three list
 \newpage
 \chap{5}{Interlude: Process API}
 \subsection{The \texttt{fork()} System Call}
-\begin{ccode}
-int main(int argc, char *argv[]) {
-  printf("hello (pid:%d)\n", (int)getpid());
-  int rc = fork();
-  if (rc < 0) { 
-    fprintf(stderr, "fork failed\n");
-    exit(1);
-  } else if (rc == 0) {
-    // child process 
-    printf("child (pid:%d)\n", (int)getpid());
-  } else {
-    // parent (main) goes here
-    printf("parent of %d (pid:%d)\n", rc, (int)getpid());
-  }
-  return 0;
-}
-\end{ccode}
+See \texttt{p1.c} for an example.
+\begin{itemize}
+  \item Once the proces reaches the \texttt{fork()} syscall, the OS will create a (nearly) identical copy of the calling process, just in its own address space
+  \item From the perspective of the OS, there are two copies of \texttt{p1.c} running, each about to return from \texttt{fork()}. 
+  \item The child does not start at \texttt{main()}, but rather the site in which \texttt{fork()} was invoked.
+  \item For the parent, \texttt{fork()} will return the PID of the child, and for the child it returns 0.
+  \item The output is also not deterministic: either the child or parent may print first. This is determined by the CPU scheduler. 
+\end{itemize}
+\subsection{The \texttt{wait()} System Call}
+See \texttt{p2.c} for an example.
+\begin{itemize}
+  \item In this example the parent invokes the \texttt{wait()} syscall, which blocks it until the child finishes executing. 
+  \item This will ensure that the program is now deterministic, as the child will always print first. 
+\end{itemize}
 \end{document}
