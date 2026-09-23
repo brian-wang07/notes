@@ -18,6 +18,7 @@
 \usepackage{tabularx}              % equal-width wrapping columns
 \usepackage{enumitem}              % tighter lists
 \usepackage{parskip}               % space between paragraphs instead of indent
+\usepackage{caption}
 
 % ── Theorem-like environments (optional, delete if not needed) ─────────────────
 \newtheorem{theorem}{Theorem}[section]
@@ -80,7 +81,7 @@
 
 \maketitle
 \tableofcontents          % auto-updates on every compile (needs 2 passes)
-Order: Ch1, Appendix A, Appendix C, Appendix B, Ch2, Ch3, Ch5, Ch4, Ch7, Ch6
+Order: Ch1, Appendix A, Appendix C, Appendix B, Ch2, Ch5, Ch3, Ch4, Ch7, Ch6
 \newpage
 \chap{1}{Fundamentals of Quantitative Design and Analysis}
 \subsection{Introduction}
@@ -393,4 +394,99 @@ Below are ways in which conditional branches are evaluated:
   \item Condition register/limited comparison: A compare instruction will write a result into any GPR, which is then checked against a predicate. This doesn't rely on any flag states and is much simpler for the compiler to reason about. The disadvantage is that some conditions (eg a < b) introduce an extra compare instruction before the branching itself. This introduces a design tension, where either the branch's compare can be trivial (which introduces extra instructions) OR the branch's compare can be more powerful (but affect the critical path).
   \item Compare and branch: The compare operation is folded into the branch instruction itself, thus no extra instructions/flags are required, at the cost of a more expensive instruction.
 \end{enumerate}
+\subsubsection{Procedure Invocation Options}
+On procedure calls some notion of state saving is needed; for example the return address. Newer architectures require the compiler to explicitly generate loads/stores for each register that is to be saved/restored.
+\begin{itemize}
+    \item Caller saving: the calling procedure is responsible for saving registers that it wants preserved after returning
+    \item Callee saving: the called procedure is responsible.
+\end{itemize}
+A mix of both is used to ensure that no values are lost during procedure calls.
+\begin{ccode}
+void clobber_stuff(); // some function whos internals we dont control
+
+int compute(int a, int b) {
+  int x = a + b;
+  clobber_stuff();
+  clobber_stuff();
+  clobber_stuff();
+  int y = x * 2; // we need to ensure x stays
+  return y;
+}
+\end{ccode}
+Suppose x is in a caller-saving register. Since we dont know what clobber\_stuff does, the compiler is obligated to move the contents somewhere else to preserve the value of x. \\
+On the other hand, if x is in a callee-saving register, then the compiler doesn't need to do this, as it is the obligation of clobber\_stuff to do preserve the value, if it is necessary.\\
+Caller saving registers are also known as volatile, as the value held within the register may change without notice. On x86, an example is the rax register (rbx is callee saved).
+\subsection{Encoding an Instruction Set}
+\begin{itemize}
+  \item The choices for how instructions are encoded affects both the size of the binary and the speed of execution (processor must decode as quickly as possible).
+  \item the Opcode is one field of the encoded instruction that specifies the specific instruction to be executed; it is paired with some number (posisbly 0) of operands.
+  \item The important decision is how the addressing mode is to be encoded.
+  \item One must balance: 
+  \begin{enumerate}
+    \item Trying to have as many registers and addressing modes as possible
+    \item The impact of having larger and more registers/addressing modes on the average instruction size and thus the average program size 
+    \item Having an instruction length that the processor can figure out nearly instantly, for the sake of pipelining
+    \begin{itemize}
+      \item For variable length encodings, the processor does not know when instruction N+1 starts until it has finished instruction N, which hurts the fetch/decode stages of pipelining.
+    \end{itemize}
+  \end{enumerate}
+\end{itemize}
+\begin{tabular}{|c|c|c|c|c|c|}
+\hline
+Operation and & Address & Address & $\cdots$ & Address & Address \\
+no. of Operands & specifier 1 & field 1 & & specifier $n$ & field $n$\\ 
+\hline
+\end{tabular}
+\captionof{table}{Variable}
+\begin{tabular}{|c|c|c|c|}
+\hline
+Operation & Address & Address & Address \\
+& field 1 & field 2 & field 3 \\
+\hline 
+\end{tabular}
+\captionof{table}{Fixed}
+\begin{tabular}{|c|c|c|}
+\hline
+Operation & Address & Address \\ 
+& specifier & field \\ 
+\hline
+\end{tabular} \\
+\begin{tabular}{|c|c|c|c|}
+\hline
+Operation & Address & Address & Address \\ 
+& specifier 1 & specifier 2 & field \\
+\hline
+\end{tabular} \\
+\begin{tabular}{|c|c|c|c|}
+\hline
+Operation & Address & Address & Address \\ 
+& specifier 1 & field 1 & field 2\\
+\hline
+\end{tabular}
+\captionof{table}{Hybrid (opcode specifies length)}
+For example, in x86 (variable):
+\begin{verbatim}
+add EAX,1000(EBX)
+\end{verbatim}
+\begin{itemize}
+  \item 32-bit integer add instruction with two operands; the opcode takes 1 byte.
+  \item The address specifier is a ModRM byte, which has 3 subfields:
+  \begin{itemize}
+    \item Addressing mode class (MOD): 2 bits 
+    \item Register operand (Reg): 3 bits 
+    \item Base register (combined with MOD to get the raddressing mode, rm): 3 bits
+  \end{itemize}
+  \item Note Note that there may also be an extra byte with the ModRM byte called the SIB (scale-index-base) byte
+  \item the displacement, which is 1 or 4 bytes; Since we are displacing by 1000, we need to use 4 bytes to represent this (for small displacements from -128 to +127, it is done with one byte).
+  \item Overall this instruction takes 6 bytes. However, if the displacement was smaller, it could take a minimum of 3.
+\end{itemize}
+\subsection{Cross-Cutting Issues: The Role of Compilers}
+Phase-ordering problem: Certain compiler optimizations are too expensive to undo, and thus they must predetermine the order in which optimization passes are done. For example, inlining procedure calls have to be done before knowing the exact size of the procedure being called.
+\subsubsection{Register Allocation}
+\begin{itemize}
+  \item Due to the importantance of proper register allocation, it is one of the most important optimizations the compiler performs.
+  \item Graph coloring algorithms are used, where a graph is constructed that represents all possible candidates for allocation to a register.
+  \item Graph coloring however is an NP-complete problem, so heuristics are used
+\end{itemize}
 \end{document}
+

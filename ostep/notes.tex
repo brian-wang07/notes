@@ -18,6 +18,7 @@
 \usepackage{tabularx}              % equal-width wrapping columns
 \usepackage{enumitem}              % tighter lists
 \usepackage{parskip}               % space between paragraphs instead of indent
+\usepackage{caption}
 
 % ── Theorem-like environments (optional, delete if not needed) ─────────────────
 \newtheorem{theorem}{Theorem}[section]
@@ -80,7 +81,7 @@
 
 \maketitle
 \tableofcontents          % auto-updates on every compile (needs 2 passes)
-Order:  5, 6, 13, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
+Order: 13, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
 \newpage
 \subsection{Introduction to Operating Systems}
 \begin{itemize}
@@ -314,4 +315,145 @@ prompt> grep -o foo file | wc -l
   \item A process should also implement the \texttt{signal()} syscall to catch different signals; for example, to cleanup resources when a SIGINT is issued.
   \item Modern systems require a strong notion of a "user" to ensure that different people have various levels of access to system resources and signals.
 \end{itemize}
+  \chap{6}{Mechanism: Limited Direct Execution}
+How to efficiently virtualize the CPU with control: The OS must virtualize the CPU in an efficient manner while retaining control over the system. Both hardware and OS support is required. 
+\subsection{Basic Technique: Limited Direct Execution}
+\begin{itemize}
+  \item A technique used by operating systems to run programs on the CPU while keeping control of system security and resources.
+  \item "Direct execution" referes to the fact that programs run on the CPU 
+\end{itemize}
+\begin{center}
+\begin{tabular}{c c}
+\textbf{OS} & \textbf{Program} \\
+\hline
+Create an entry for process list & \\
+Allocate memory for program & \\ 
+Load program into memory & \\ 
+Setup stack with argc and argv & \\ 
+Clear registers & \\ 
+Execute main() & \\
+& Run main() \\
+& Execute return from main() \\ 
+Free memory of process & \\ 
+Remove from process list & \\
+\end{tabular}
+\captionof{table}{Direct execution protol, no limits}
+\end{center}
+\begin{itemize}
+  \item Issues: How do we restrict operations for specific programs? How do we implement time sharing to virtualize the CPU?
+\end{itemize}
+\subsection{Problem \#1: Restricted Operations}
+How to perform restricted operations: A process must be able to perform I/O and some other (possibly) restricted operations, but wihtout giving the process full access over the system. How does the OS implement this while still executing as fast as possible?
+\begin{definition}[User mode]
+User mode is a restricted operating state. Code ran in user mode does not have access to certain operations, such as issuing I/O requests. Performing a restricted operation in user mode will cause the processor to raise an exception and the OS to kill the proces.
+\end{definition}
+\begin{definition}[Kernel mode]
+The operating state in which the operating system (or kernel) runs in. There are no hardware-enforced restrictions in this mode. 
+\end{definition}
+\begin{itemize}
+  \item System calls allow the kernel to expose pieces of kernel functionality to user programs, such as accessing file systems, creating and destroying processes, communicating with other processes and allocating memory.
+  \item System calls are executed via trap instructions, which is a jump + elevation into kernel mode.
+  \item When finished, the OS issues a return-from-trap instruction, which returns back to the user program and reduces priviledges to user mode.
+  \item The kernel controls what code executes during a trap with a trap table (set on boot).
+\end{itemize}
+\begin{center}
+\small
+\begin{tabular}{c c c}
+\textbf{OS @ boot (kernel mode)} & \textbf{Hardware} & \\
+\hline 
+\textbf{Initialize trap table} & & \\
+& remember address of syscall handler & \\ 
+\\ 
+\textbf{OS @ run (kernel mode)} & \textbf{Hardware} & \textbf{Program (user mode)} \\ 
+\hline
+Create entry for process list & & \\
+Allocate memory for program & & \\ 
+Load program into memory & & \\ 
+Setup user stack with argv & & \\ 
+Fill kernel stack with reg/PC & &\\
+\textbf{return-from-trap} & & \\
+& restore regs(from kernel stack) & \\ 
+& move to user mode & \\ 
+& jump to main & \\ 
+& & Run main() \\ 
+& & /*executing..*/ \\ 
+& & Call syscall \\ 
+& & \textbf{trap} into OS \\ 
+& save regs (to kernel stack) & \\ 
+& move to kernel mode & \\ 
+& jump to trap handler (from trap table) & \\ 
+Handle trap & & \\ 
+Do work for syscall & & \\ 
+\textbf{return-from-trap} & & \\ 
+& restore regs(from kernel stack) & \\ 
+& move to user mode & \\ 
+& jump to PC & \\
+& & /*keep executing...*/ \\ 
+& & return from main \\ 
+& & \textbf{trap} invoked by \texttt{exit()} \\ 
+Free memory of process & & \\ 
+Remove from process list & &  
+\end{tabular}
+\captionof{table}{Limited Direct Execution Protocol}
+\end{center}
+\begin{itemize}
+  \item The trap table contains various exceptions and one entry for syscalls (eg 0x80 on x86).
+  \item When a syscall is invoked, a system-call number is assigned to each unique syscall. This tells the trap handler which syscall to invoke.
+  \item User trap instruction -> hardware trap table -> syscall trap handler -> syscall table (seperate from trap table) -> do stuff
+\end{itemize}
+\subsection{Problem \#2: Switching Between Processes} 
+Assuming a single core system: If a process is running on the CPU, then the OS is not running; how does it do anything?\\
+Specifically, How can the operating system regain control of the CPU so that it can switch between processes?
+\subsubsection{Cooperative approach: Wait for syscalls}
+\begin{itemize}
+  \item Most early operating systems
+  \item A cooperative approach means that the OS will assume that long-running processes will periodically give up the CPU so that the OS can do some other stuff.
+  \item This works as most processes frequenetly issue syscalls to the OS. 
+  \item Cooperative operating systems also generally come with a yield syscall which transfers control to the OS so it can do stuff.
+  \item Illegal operations (like dividing by 0, accessing restricted memory) will also generate traps for the OS so that it has control.
+  \item However, this raises the question: How can the OS gain control of the CPU even if processes are not being cooperative?
+\end{itemize}
+\subsection{Non-cooperative approach}
+\begin{itemize}
+  \item Timer interrupt: An internal timer will make the hardware periodically issue interrupts to a process every few miliseconds; this will temporarily halt the process and give the OS control through a trap (via an interrupt handler).
+  \item The hardware also has some responsibility during an interrupt: it needs to save enough of the state of the program just before the interrupt so that after the subsequent return-from-trap instruction the program can run correctly.
+\end{itemize}
+\subsubsection{Saving and Restoring Context}
+\begin{itemize}
+  \item The scheduler may decide to switch to a different process during an interrupt. 
+  \item If this happens, the OS runs a context switch, which saves GPRs, the PC, and the kernel stack pointer for the current process and restores them for the process to be executed.
+\end{itemize}
+\begin{center}
+\small
+\begin{tabular}{c c c}
+\textbf{OS @ boot (kernel mode)} & \textbf{Hardware} & \\
+\hline 
+\textbf{initialize trap table} & &  \\ 
+& Remember address of syscall handler & \\ 
+& and timer handler & \\
+\textbf{start interrupt timer} & & \\
+& start timer & \\
+& interrupt CPU in X ms & \\
+\\
+\textbf{OS @ run (kernel mode)} & \textbf{Hardware} & \textbf{Program(user mode)} \\
+\hline 
+& & Process A \\
+& & /* after X ms... */ \\ 
+& \textbf{timer interrupt} & \\ 
+& regs(A)->kernel stack(A) & \\ 
+& move to kernel mode & \\ 
+& jump to trap handler & \\ 
+Handle the trap & & \\ 
+Context switch: & & \\ 
+  regs(A)->proc\_t(A) & & \\
+  regs(B)<-proc\_t(B) & & \\
+  switch to kernel stack(B) & & \\
+\textbf{return from trap to B} & & \\
+& regs(B)<-kernel stack(B) & \\ 
+& move to user mode & \\
+& jump to B's PC & \\
+& & Process B \\
+\end{tabular}
+\catpionof{table}{Limited Direct Execution Protol (Timer Interrupt)}
+\end{center}
 \end{document}
