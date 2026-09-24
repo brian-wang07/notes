@@ -31,7 +31,7 @@
 
 %tikz
 \usepackage{tikz}
-\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds, patterns}
 
 
 % Code blocks
@@ -81,7 +81,7 @@
 
 \maketitle
 \tableofcontents          % auto-updates on every compile (needs 2 passes)
-Order: 13, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
+Order: 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
 \newpage
 \subsection{Introduction to Operating Systems}
 \begin{itemize}
@@ -454,6 +454,104 @@ Context switch: & & \\
 & jump to B's PC & \\
 & & Process B \\
 \end{tabular}
-\catpionof{table}{Limited Direct Execution Protol (Timer Interrupt)}
+\captionof{table}{Limited Direct Execution Protocol (Timer Interrupt)}
 \end{center}
+\chap{13}{The Abstraction: Address Spaces}
+\subsection{Early Systems}
+Early OS designs would not abstract away physical address space (1 to 1 mapping).
+\subsection{Multiprogramming and Time Sharing}
+\begin{itemize}
+  \item Multiprogramming: When multiple processes are ready to run at a given time, and the OS is responsible for deciding when to switch between them, for example during an IO request.
+  \item This helped increase the effective utilization of the CPUa. 
+  \item Time sharing: When the OS allows multiple users or tasks to share the same CPU by switching between them quicky.
+  \item This was initially implemented my letting one process run for a short time (giving it full access to all memory), saving its state to some kind of disk, load the other process's state, and run it. 
+  \item The limitation with this implementation is that it is extremely slow; while saving and restoring register-level information is fast, writing memory to disk is very slow.
+\end{itemize}
+\subsection{The Address Space}
+The address space is an abstraction of physical memory which contains the memory state of the running program. 
+\begin{itemize}
+  \item This contains the program code, the heap, and the stack.
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[
+    seg/.style    = {draw, minimum width=3cm, align=center},
+    kb/.style     = {font=\small, anchor=east},
+    note/.style   = {font=\small, align=center, text width=4.2cm},
+    growth/.style = {-{Stealth[length=2.5mm]}, very thick}
+  ]
+  % segment boundaries (not to scale: free space is compressed)
+  \def\w{3}
+  \fill[pattern=north east lines, pattern color=gray!60] (0,-2) rectangle (\w,-7.2);
+  \draw (0,0) rectangle (\w,-1) node[midway] {Program Code};
+  \draw (0,-1) rectangle (\w,-2) node[midway] {Heap};
+  \draw (0,-2) rectangle (\w,-7.2);
+  \draw (0,-7.2) rectangle (\w,-8.2) node[midway] {Stack};
+  \node[fill=white, inner sep=1pt] at (\w/2,-4.6) {(free)};
+
+  % growth arrows
+  \draw[growth] (\w/2,-2)   -- (\w/2,-3.6);
+  \draw[growth] (\w/2,-7.2) -- (\w/2,-5.6);
+
+  % addresses
+  \node[kb] at (-0.2, 0)    {0KB};
+  \node[kb] at (-0.2,-1)    {1KB};
+  \node[kb] at (-0.2,-2)    {2KB};
+  \node[kb] at (-0.2,-7.2)  {15KB};
+  \node[kb] at (-0.2,-8.2)  {16KB};
+
+  % annotations
+  \node[note, anchor=north west] at (\w+0.2,-0.1) {the code segment:\\ where instructions live};
+  \node[note, anchor=north west] at (\w+0.2,-1.1) {the heap segment:\\ contains malloc'd data\\ dynamic data structures\\ (it grows positively)};
+  \node[note, anchor=south west] at (\w+0.2,-8.2) {(it grows negatively)\\ the stack segment:\\ contains local variables\\ arguments to routines,\\ return values, etc.};
+\end{tikzpicture}
+\captionof{figure}{An Example Address Space}
+\end{center}
+See \texttt{va.c} for an example of this.
+\begin{itemize}
+  \item Note that this is an abstraction from physical memory; the program isnt really loaded in memory at physical address 0 to 16KB.
+  \item This abstracted address is called the virtual address, and the process in which the OS performs this abstraction is virtualizing memory. 
+\end{itemize}
+\subsection{Goals}
+\begin{enumerate}
+  \item Transparency: The OS should implement virtual memory in a way that is invisible to the running program; i.e. the running program should not be aware that the memory it is accessing is a virtual address.
+  \item Efficiency: The OS should make virtualization as fast and as space-efficient as possible. This often requires hardware support (eg translation lookaside buffers)
+  \item Protection: The OS must ensure that that one process cannot access or affect in any way the memory contents of any other processes (that are outside of its address space).
+\end{enumerate}
+\chap{14}{Interlude: Memory API}
+In Unix/C programs, understanding how to allocate and manage memory is critical in building robust and reliable software. What interfaces are commonly used? What mistakes should be avoided?
+\subsection{Types of Memory}
+\begin{itemize}
+  \item Stack memory is implicitly managed by the compiler (also known as automatic memory)
+  \item When the variable goes out of its current scope it gets deallocated; thus heap memory is used for long lasting memory
+\end{itemize}
+\subsection{The \texttt{malloc()} Call}
+\begin{itemize}
+  \item Allocates memory on the heap, and returns either a pointer to the memory or NULL on fail. 
+\end{itemize}
+\begin{ccode}
+void *malloc( size_t size ); // defined in header <stdlib.h>
+
+// the return of malloc should be cast to the type of the underlying data.
+double *d = (double *) malloc(sizeof(double));
+\end{ccode}
+\subsection{The \texttt{free()} Call}
+This frees memory that has been previously allocated on the heap. 
+\begin{ccode}
+void free( void *ptr ); // defined in header <stdlib.h>
+\end{ccode}
+\begin{itemize}
+  \item Note that it is UB if \texttt{ptr} does not equal a value returned by one of malloc's variants. \\
+  \item Using \texttt{ptr} after it has been freed is undefined (use-after-free). \\
+  \item It is unddefined if the memory area referred to by \texttt{ptr} has already been deallocated (double-free).
+  \item If your program is short-lived, it may not be necessary (albeit bad practice) to free memory, as the address space of a program gets wiped on return.
+\end{itemize}
+\subsection{Underlying OS Support}
+\begin{itemize}
+  \item Note that \texttt{malloc} and \texttt{free} are not syscalls; instead they are implemented by third party libraries (such as libc) which act as thin wrappers around syscalls.
+  \item One syscall is \texttt{brk}, which changes the location of the end of the program's break or heap.
+  \item \texttt{mmap} is another syscall that requests an anonymous memory region within a program, which is not associated with that particular program and can thus be shared with other programs/processes (memory mapped via \texttt{mmap} is in swap space} which act as thin wrappers around syscalls.
+  \item One syscall is \texttt{brk}, which changes the location of the end of the program's break or heap.
+  \item \texttt{mmap} is another syscall that requests an anonymous memory region within a program, which is not associated with that particular program and can thus be shared with other programs/processes (memory mapped via \texttt{mmap} is in swap space}).
+  \item 
+\end{itemize}
 \end{document}

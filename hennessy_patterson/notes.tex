@@ -81,7 +81,7 @@
 
 \maketitle
 \tableofcontents          % auto-updates on every compile (needs 2 passes)
-Order: Ch1, Appendix A, Appendix C, Appendix B, Ch2, Ch5, Ch3, Ch4, Ch7, Ch6
+Order: Ch1, Appendix A, Appendix B, Appendix C, Ch2, Ch5, Ch3, Ch4, Ch7, Ch6
 \newpage
 \chap{1}{Fundamentals of Quantitative Design and Analysis}
 \subsection{Introduction}
@@ -488,5 +488,90 @@ Phase-ordering problem: Certain compiler optimizations are too expensive to undo
   \item Graph coloring algorithms are used, where a graph is constructed that represents all possible candidates for allocation to a register.
   \item Graph coloring however is an NP-complete problem, so heuristics are used
 \end{itemize}
+\app{2}{Review of Memory Hierarchy}
+\subsection{Introduction}
+% i love memorizing terms :D
+\begin{itemize}
+  \item \textit{Cache}: The name given to the first level of memory which is encountered once an address leaves the processor. 
+  \begin{itemize}
+    \item Caches are also applied whenever buffering is applied to store frequently or recently used items, such as file caches, name caches, etc.
+  \end{itemize}
+  \item \textit{Cache hit}: When the processor finds the requested piece of data in the cache; if it is not in a cache it is a \textit{cache miss}.
+  \item \textit{Block}: A fixed size collection of data that is retrieved when accessing a requested word not currently in the cache.
+  \item \textit{Temporal locality}: How likely this word is going to be used in the near future (thus it should be placed in a cache so it can be accessed quickly).
+  \item \textit{Spacial locality}: How likely data near the word accessed is going to be used (thus data in similar locations should be fetched together)
+  \item \textit{Latency}: How long it takes to fetch the first word of a block (time to retrieve)
+  \item \textit{Bandwidth}: How long it takes to fetch the rest of the block (throughput)
+  \item Cache misses are handled by hardware and forces processors to use in-order execution processors to stall, however out-of-order processors may be able to continue with instructions that dont use that piece of data.
+  \item \textit{Page}: A fixed-size block of address space; at a given time each page resides either in main memory or on disk. 
+  \item \textit{Page fault}: When a processor references an item not in a cache nor in a page residing in main memory. Handled in software so that the processor does not stall.
+  \item \textit{Memory stall cycles}: The number of cycles the processor is stalled waiting for a memory access.
+\end{itemize}
+\begin{align*}
+  \text{CPU Execution time} = \text{(CPU Clock Cycles} + \text{Memory stall cycles)} \times \text{Clock cycle time}
+\end{align*}
+\begin{itemize}
+  \item \textit{Miss penalty}: The number of misses as well as the cost per miss
+\end{itemize}
+\begin{align*}
+\text{Miss Penalty} &= \text{Access latency} + \frac{\text{Block Size}}{\text{Bandwidth}} \\
+& \approx \frac{\text{Total Memory Stall Cycles}}{\text{Number of Misses}} \\
+\text{Memory Stall Cycles} &= \text{Number of misses} \times \text{Miss penalty} \\ 
+&= \text{IC} \times \frac{\text{Misses}}{\text{Instruction}} \times \text{Miss penalty} \\ 
+&= \text{IC} \times \frac{\text{Memory accesses}}{\text{Instruction}} \times \text{Miss rate} \times \text{Miss Penalty}
+\end{align*}
+\begin{itemize}
+  \item Note that "Memory Access" includes instruction fetches as well; a program that is 50\% memory accesses will have 1.0 accesses for fetching the instruction itself (always happens) + 0.5 accesses for loads/stores = 1.5 memory accesses per instruction.
+  \item The last form is the easiest to measure on hardware. The average miss penalty via the stall cycles and number of misses is empirical and generally used.
+  \item Miss rates can be measured with cache simulators, which take an address trace (a log of all memory addressing operations done) to simulate the cache behaviour and determine the number of total misses and hits.
+  \item Many modern microprocessors have builtin counters that can measure miss rate as well.
+\end{itemize}
+\subsubsection{Where can a block be placed in a cache?}
+\begin{itemize}
+  \item If there is a one-to-one mapping between placements and blocks, then the cache is \textit{directly mapped}, with a mapping 
+\end{itemize}
+\begin{align}
+  A\ \text{mod}\ n_B
+\end{align}
+\begin{itemize}
+  \item Where $A$ is the block address and $n_B$ is the number of blocks in the cache.
+  \item If a block can be placed anywhere, then the cache is \textit{fully associative}.
+  \item If a block can be placed in a restricted set of places in the cache, then the cache is \textit{set associative}, where a set is a group of blocks in the cache.
+  \item A block is first mapped to a set (similar to direct mapping) via 
+\end{itemize}
+\begin{align}
+  A\ \text{mod}\ n_S
+\end{align}
+\begin{itemize}
+  \item Where $n_S$ is the number of sets, and the block is placed anywhere in the set. 
+  \item The cache placement is then called $n$\textit{-way set associative}, where $n$ is the number of blocks in a given set.
+  \item Most L1 caches are 8-way and L2/L3 caches often 8- to 16-way.
+  \item Ways and sets are orthogonal to each other
+\end{itemize}
+\subsubsection{How is a block found if it is in the cache?}
+\begin{itemize}
+  \item Each block frame has an address tag that gives the block an address. 
+  \item Ideally all tags are searched in parallel.
+  \item A \textit{valid bit} is used to say whether or not the entry contains a valid address. 
+  \item A full address is divided into 4 sections:
+  \begin{enumerate}
+    \item Block Address: Can be further divided into a tag field and index field.
+    \item The index field describes which set the block is in 
+    \item The tag field specifies which block in the set may contain the information.
+    \item The block offset selects the desired data from the block.
+  \end{enumerate}
+  \item The tag field must be searched in parallel since there does not exist a bijective mapping from addresses to block frames (there are too many addresses for not enough blocks).
+  \item While the entire address may be searched, the offset bit would be trivial since the entire block is either present or not (a block cannot be half loaded), and the index is redundant as it was used to select which set the block is in.
+  \item Increasing associativity increases the number of blocks per set and decreases the size of the index which increases the size of the tag. Fully associative caches have no index, and thus have to check every address in parallel.
+\end{itemize}
+\subsubsection{Which block should be replaced on a cache miss?}
+When a miss occurs, a block must be selected to be evicted to make space for a different block. 
+\begin{itemize} 
+  \item Random - Candidate blocks are randomly selected to ensure a uniform allocation spread. 
+  \item Least recently used (LRU) - Accesses to blocks are recoreded, and the block that has been unused for the longest is evicted. This reduces the chances of throwing out information that may be needed soon, based off of the principle that recently used blocks are likely to be used agaign.
+  \item First in, First out (FIFO) - An alternative to LRU as real LRU is expensive to calculate; FIFO can approximate LRU by determining the oldest block instead of the LRU.
+\end{itemize}
+Real processors usually implement a pseudo-LRU; When a way in a given set is accessed, turn on a bit. When all bits in a set are on, turn off all bits except for the most recently accessed item. When a block needs to be evicted, choose randomly from any bit that is off
+\subsubsection{What happens on a write?}
 \end{document}
 
