@@ -573,5 +573,51 @@ When a miss occurs, a block must be selected to be evicted to make space for a d
 \end{itemize}
 Real processors usually implement a pseudo-LRU; When a way in a given set is accessed, turn on a bit. When all bits in a set are on, turn off all bits except for the most recently accessed item. When a block needs to be evicted, choose randomly from any bit that is off
 \subsubsection{What happens on a write?}
+\begin{itemize}
+  \item Since reads are much more common than writes the cache is optimized for reads; processors also need to wait for reads to finish but not necessarily for writes.
+  \item As well, the block addresses are in a seperate structure than the actual data itself (split in a tag array and data array). Once the processor indexes into the correct set, the data (at the block offset) in all ways of the set are fetched; there is a n:1 mux at the end which returns the block associated with the correct tag.
+  \item These are done at the same time; if the read is a hit, then the requested part is passed to the processor immediately, and if it is a miss there is no harm to performance (the values read are ignored).
+  \item This cannot be done for writes, as modifying a block cannot be done until the exact block to modify has been found.
+  \item As well, more than enough bytes can be returned on a read; with writes, the exact number of bytes specified are allowed to be modified.
+  \item Two write policies:
+  \begin{enumerate}
+    \item \textit{Write through}: Information is written into the block in the cache as well as the block in lower-level memory.
+    \item \textit{Write back}: Information is only written into the block in the cache; the block is then only written to the next level down when evicted.
+  \end{enumerate}
+  \item For write-back caches, they also often have a \textit{dirty bit}, which signifies whether that block has been modified; if it is clean, then there is no need to write the block back into the next level down (since it has not been changed).
+  \item Write-back is better for latency as multiple writes within a block require only one write to the lower level memory.
+  \item Write through is simpler to implement as the cache block is always clean; write through also guarantees that the next level down will always contain the most recent copy of the data (easier for coherency).
+  \item \textit{Write stall}: When the processor must wait for writes to complete.
+  \item \textit{Write buffer}: Write instructions are queued in a buffer, overlapping processor execution with memory updating (write stalls are still possible!)
+  \item Since the processor doesnt need the data after a write, there are two options on a write miss:
+  \begin{enumerate}
+    \item \textit{Write allocate}: On write miss, allocate the block and proceed with the write hit actions. Write misses act exactly like read misses.
+    \item \textit{No-write allocate}: On write miss, modify the block in-place in the lower-level memory
+  \end{enumerate}
+\end{itemize}
+Assuming fully associative write-back that starts empty:
+\begin{bashcode}
+Write Mem[100]; // 1
+Write Mem[100]; // 2
+Read  Mem[200]; // 3
+Write Mem[200]; // 4
+Write Mem[100]; // 5
+\end{bashcode}
+For no-write allocate:
+\begin{enumerate}
+  \item Miss
+  \item Miss (Mem[100] was not allocated)
+  \item Miss 
+  \item Hit 
+  \item Miss
+\end{enumerate}
+For write-allocate:
+\begin{enumerate}
+  \item Miss 
+  \item Hit (Mem[100] was allocated) 
+  \item Miss 
+  \item Hit 
+  \item Hit
+\end{enumerate}
 \end{document}
 
