@@ -511,7 +511,7 @@ Phase-ordering problem: Certain compiler optimizations are too expensive to undo
   \text{CPU Execution time} = \text{(CPU Clock Cycles} + \text{Memory stall cycles)} \times \text{Clock cycle time}
 \end{align*}
 \begin{itemize}
-  \item \textit{Miss penalty}: The number of misses as well as the cost per miss
+  \item \textit{Miss penalty}: The cost of a single miss, i.e. the extra cycles spent servicing it
 \end{itemize}
 \begin{align*}
 \text{Miss Penalty} &= \text{Access latency} + \frac{\text{Block Size}}{\text{Bandwidth}} \\

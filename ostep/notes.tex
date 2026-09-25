@@ -549,9 +549,6 @@ void free( void *ptr ); // defined in header <stdlib.h>
 \begin{itemize}
   \item Note that \texttt{malloc} and \texttt{free} are not syscalls; instead they are implemented by third party libraries (such as libc) which act as thin wrappers around syscalls.
   \item One syscall is \texttt{brk}, which changes the location of the end of the program's break or heap.
-  \item \texttt{mmap} is another syscall that requests an anonymous memory region within a program, which is not associated with that particular program and can thus be shared with other programs/processes (memory mapped via \texttt{mmap} is in swap space} which act as thin wrappers around syscalls.
-  \item One syscall is \texttt{brk}, which changes the location of the end of the program's break or heap.
-  \item \texttt{mmap} is another syscall that requests an anonymous memory region within a program, which is not associated with that particular program and can thus be shared with other programs/processes (memory mapped via \texttt{mmap} is in swap space}).
-  \item 
+  \item \texttt{mmap} is another syscall; with the anonymous flag it creates a memory region that is not backed by any file, but is instead associated with swap space. This region can then be treated like a heap and managed as such.
 \end{itemize}
 \end{document}
