@@ -543,7 +543,7 @@ void free( void *ptr ); // defined in header <stdlib.h>
   \item Note that it is UB if \texttt{ptr} does not equal a value returned by one of malloc's variants. \\
   \item Using \texttt{ptr} after it has been freed is undefined (use-after-free). \\
   \item It is unddefined if the memory area referred to by \texttt{ptr} has already been deallocated (double-free).
-  \item If your program is short-lived, it may not be necessary (albeit bad practice) to free memory, as the address space of a program gets wiped on return.
+  \item If your proaram is short-lived, it may not be necessary (albeit bad practice) to free memory, as the address space of a program gets wiped on return.
 \end{itemize}
 \subsection{Underlying OS Support}
 \begin{itemize}
@@ -551,4 +551,109 @@ void free( void *ptr ); // defined in header <stdlib.h>
   \item One syscall is \texttt{brk}, which changes the location of the end of the program's break or heap.
   \item \texttt{mmap} is another syscall; with the anonymous flag it creates a memory region that is not backed by any file, but is instead associated with swap space. This region can then be treated like a heap and managed as such.
 \end{itemize}
+\chap{15}{Mechanism: Address Translation}
+How can we build an efficient virtualization of memory?
+\begin{itemize}
+  \item The OS needs to have both efficiency and control over the program when virtualizing memory.
+  \item Make use of hardware support whenever possible (registers, TLB, page-tables, etc.)
+  \item Ensure no application is able to access any memory but its own
+  \item \textit{Hardware-based address translation}: Also known as just address translation for short - On any memory access, the hardware transforms the virtual address to the physical location of the data requested.
+  \item It is the hardware's responsibility to translate virtual addresses to the physical locations and enforce protection (bounds and permission checks).
+  \item The OS is responsible for keeping track of occupied and free physical locations, setup, and exception handling.
+  \item This becomes more complicated when you factor in the fact that different program's address spaces may have the same virtual address but map to different physical locations which the OS must keep track of.
+  \item Interposition: Placing a layer in between the software and an interface to add some extra functionality. Interposition (should) be invisible to the caller. 
+  \item In the context of virtualizing memory, the hardware interposes every memory access by translating the virtual address to a physical location.
+\end{itemize}
+\subsection{Assumptions}
+For now, assume:
+\begin{itemize}
+  \item User address space must be contiguous in physical memory. 
+  \item User address space is smaller than the size of physical memory. 
+  \item Each address space is exactly the same size
+\end{itemize}
+\subsection{Example}
+Consider:
+\begin{ccode}
+void func() {
+  int x = 3000;
+  x = 3 + 3; // line of code we are interested in
+  /* ... */
+}
+\end{ccode}
+With no optimizations (x86):
+\begin{bashcode}
+; ... 
+movl -8(%rbp), %eax 
+addl $3, %eax 
+movl %eax, -8(%rbp)
+; ...
+\end{bashcode}
+\begin{itemize}
+  \item x is a local variable at address \texttt{\%rbp - 8}, and gets moved into register eax. 
+  \item Add the constant 3 
+  \item Move x out of eax back into its stack address
+  \item From the program's perspective, its address space starts at 0 to some number (say, 16KB).
+  \item The OS needs to place the process somewhere else, not necessarily starting at address 0. How?
+\end{itemize}
+\subsection{Dynamic Relocation}
+\begin{itemize}
+  \item Also known as base and bounds, this is a hardware-based technique, where each CPU requires two hardware registers, the base and bounds (or limit) register.
+  \item Each program is compiled as if it starts at address 0.
+  \item When a process is loaded, the OS decides where in physical memory to place the program and sets the base register to this value. 
+  \item Once the program starts running, it adds the base register value to get the physical address
+\end{itemize}
+\begin{align*}
+\text{physical address} = \text{virtual address} + \text{base}
+\end{align*}
+\begin{itemize}
+  \item Note that the interposition ensures that no "add base register" ever shows up in the instructions themselves (interposition is invisible)
+  \item Address translation: transforming a virtual address into a physical address 
+  \item Since the addressing happens at runtime (base register is set when the program is compiled and loaded), it is dynamic relocation.
+  \item The bounds register is used to ensure that no accesses exceed the program's address space
+  \item Bounds register stores the program size (virtual address of the largest allowed memory access, starting at 0); exception is raised before translation.
+  \item The portion of the CPU that handles address translation is called the memory-management unit (MMU).
+  \item Example: consider a process with an address space of 4KB that is loaded at physical address 16KB.
+  \item Base register is set to 16KB, Bounds register is set to 4KB
+\end{itemize}
+\begin{center}
+\begin{tabular}{c c c}
+  \textbf{Virtual Address} && \textbf{Physical Address} \\
+  \hline 
+  0 & $\rightarrow$ & 16KB \\ 
+  1KB & $\rightarrow$ & 17KB \\ 
+  3000 & $\rightarrow$ & 19384 \\ 
+  4400 & $\rightarrow$  & \textit{fault (out of bounds)} \\
+\end{tabular}
+\end{center}
+\subsection{Hardware support: A summary} 
+\begin{itemize}
+  \item The hardware must have support for two different modes: kernel mode and user mode. 
+  \item A single bit is usually used for this to indicate which mode the CPU is currently running in. 
+  \item Hardware must also provide base nad bound registers, plus the MMU of the CPU.
+\end{itemize}
+\subsection{Operating System Issues}
+Responsibilities of the OS include:
+\begin{itemize}
+  \item OS must find space in physical memory for a newly created process (under our assumptions, this should be trivial).
+  \item The OS will search a \textbf{free list} which lists ranges of physical memory not currently in use to find where to place the process. 
+  \item The OS must put the memory of a process back on the free list on exit. 
+  \item Since each CPU only has one base-bounds register pair, it must save the contents of these registers when context switching into some per-process area such as the process structure or process control block.
+  \item The OS must provide exception handlers; these handlers are configured at boot time. On most exceptions the OS will terminate the process that caused the exception.
+\end{itemize}
+\begin{center}
+\begin{tabular}{c c c}
+\textbf{OS @ boot} & \textbf{Hardware} & \textbf{No program yet} \\ 
+\hline 
+\textbf{initialize trap table} & & \\
+& Remember addresses of... & \\
+& syscall handler & \\ 
+& timer handler & \\ 
+& illegal mem-access handler & \\ 
+& illegal instruction haldner & \\ 
+\textbf{start interrupt timer} & &\\
+& start timer; interrupt every X ms & \\ 
+\textbf{initialize process table} & & \\
+\textbf{initialize free list} & & \\
+\end{tabular}
+\end{center}
 \end{document}
