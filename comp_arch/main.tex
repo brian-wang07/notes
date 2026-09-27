@@ -1,0 +1,100 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Encoding & fonts ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+
+% ── Hyperlinks & auto-updating TOC ────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}   % hidelinks = no ugly red boxes
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{tabularx}              % equal-width wrapping columns
+\usepackage{enumitem}              % tighter lists
+\usepackage{parskip}               % space between paragraphs instead of indent
+\usepackage{caption}
+
+% ── Theorem-like environments (optional, delete if not needed) ─────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+%tikz
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+
+
+% Code blocks
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+}
+
+\lstnewenvironment{cppcode}[1][]{\lstset{language=C++, #1}}{}
+\lstnewenvironment{pycode}[1][]{\lstset{language=Python, #1}}{}
+\lstnewenvironment{ccode}[1][]{\lstset{language=C, #1}}{}
+\lstnewenvironment{bashcode}[1][]{\lstset{language=bash, #1}}{}
+\newcommand{\code}[1]{\lstinline|#1|}
+
+% Source tag: \src{H\&P B.1} prints a small gray [H&P B.1] inline
+\newcommand{\src}[1]{{\small\textcolor{gray}{[#1]}}}
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{Computer Architecture}
+\author{Brian}
+\date{\today}
+
+% Uncomment to compile only some topics (page numbers/refs stay correct):
+\includeonly{05-caches}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{-1}   % foundations = §0, so section numbers match file numbers
+\include{00-foundations}
+% ── Phase A: the core ──
+\include{01-pipelining}
+\include{02-ooo-speculation}
+\include{03-store-buffer}
+\include{04-measurement}
+% ── Phase B: memory ──
+\include{05-caches}
+\include{06-virtual-memory}
+\include{07-prefetching}
+\include{08-dram-numa}
+% ── Phase C: multicore ──
+\include{09-coherence}
+\include{10-consistency}
+\include{11-atomics-sync}
+% ── Phase D: everything else ──
+\include{12-frontend}
+\include{13-simd}
+\include{14-platform-tuning}
+\include{15-io-path}
+
+\end{document}

@@ -18,7 +18,7 @@
 \usepackage{tabularx}              % equal-width wrapping columns
 \usepackage{enumitem}              % tighter lists
 \usepackage{parskip}               % space between paragraphs instead of indent
-\usepackage{caption}
+\usepackage[hypcap=false]{caption}  % hypcap is meaningless for \captionof outside floats
 
 % ── Theorem-like environments (optional, delete if not needed) ─────────────────
 \newtheorem{theorem}{Theorem}[section]
@@ -81,7 +81,7 @@
 
 \maketitle
 \tableofcontents          % auto-updates on every compile (needs 2 passes)
-Order: 13, 15, 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
+Order: 16, 17, 18, 19, 20, 21, 22, 23, 26, 27, 28, 29, 30, 31, 32, 33, 7, 8, 10, 9, 14, 36, 39, 40, 42, 37, 44, 45, 38, 41, 43, 47, 48, 49, 50, 51
 \newpage
 \subsection{Introduction to Operating Systems}
 \begin{itemize}
@@ -540,8 +540,8 @@ This frees memory that has been previously allocated on the heap.
 void free( void *ptr ); // defined in header <stdlib.h>
 \end{ccode}
 \begin{itemize}
-  \item Note that it is UB if \texttt{ptr} does not equal a value returned by one of malloc's variants. \\
-  \item Using \texttt{ptr} after it has been freed is undefined (use-after-free). \\
+  \item Note that it is UB if \texttt{ptr} does not equal a value returned by one of malloc's variants.
+  \item Using \texttt{ptr} after it has been freed is undefined (use-after-free).
   \item It is unddefined if the memory area referred to by \texttt{ptr} has already been deallocated (double-free).
   \item If your proaram is short-lived, it may not be necessary (albeit bad practice) to free memory, as the address space of a program gets wiped on return.
 \end{itemize}
@@ -611,7 +611,7 @@ movl %eax, -8(%rbp)
   \item Since the addressing happens at runtime (base register is set when the program is compiled and loaded), it is dynamic relocation.
   \item The bounds register is used to ensure that no accesses exceed the program's address space
   \item Bounds register stores the program size (virtual address of the largest allowed memory access, starting at 0); exception is raised before translation.
-  \item The portion of the CPU that handles address translation is called the memory-management unit (MMU).
+  \item The portion of the CPU that handles address translation is called the memory-\hspace{0pt}management unit (MMU).
   \item Example: consider a process with an address space of 4KB that is loaded at physical address 16KB.
   \item Base register is set to 16KB, Bounds register is set to 4KB
 \end{itemize}
@@ -656,4 +656,249 @@ Responsibilities of the OS include:
 \textbf{initialize free list} & & \\
 \end{tabular}
 \end{center}
+\chap{16}{Segmentation}
+How do we support a large address space with (potentially) a lot of free space between the stack and the heap?
+\subsection{Segmentation: Generalized Base/Bounds}
+\begin{itemize}
+  \item Have multiple base/bounds registers (one per logical segment) in the MMU.
+  \item One segment is a contiguous portion of the address space of a specific length.
+  \item A canonical address space has three segments: the code, stack, and heap.
+  \item Via segmentation the OS places each one of these in seperate places in memory to avoid filling physical memory with unused virtual space.
+  \item Stack still grows nnegatively (convention)
+  \item In this case, the hardware must be able to support three pairs of base/bounds registers.
+\end{itemize}
+\subsection{Which segment are we referring to?}
+\begin{itemize}
+  \item Explicit approach: Use the top n-bits of the virtual address to identify which segment the address is for (minimum number of bits to represent number of segments)
+  \item Eg. with three segments, use top 2 bits; 00 -> code segment, 01 -> heap, 11 -> stack.
+  \item Bottom bits are the offset into the segment. 
+  \item Would look something like:
+\end{itemize}
+\begin{ccode}
+/* ... */
+// assuming 14-bit VA, 3 segments: 
+
+// get top 2 bits:
+Segment = (VirtualAddress & SEG_MASK) >> SEG_SHIFT
+// then the offset 
+Offset = VirtualAddress & OFFSET_MASK 
+// check bounds 
+if (Offset >= Bounds[Segment]) RaiseException(PROTECTION_FAULT) 
+else { 
+  PhysAddr = Base[Segment] + Offset 
+  Reg = AccessMemory(PhysAddr)
+}
+/* ... */
+\end{ccode}
+\begin{itemize}
+  \item As having two bits allows for 4 segments (resulting in an unused segment), some systems will merge the code and heap segment and use one bit to identify the segment.
+  \item Each segment is also limited in size as the top n bits are reserved. 
+  \item Implicit approach involves the processor inferring the segment
+  \begin{itemize}
+    \item Generated from PC is in code segment 
+    \item Based off of the stack or base pointer is in stack segment 
+    \item Any other must be in the heap segment
+  \end{itemize}
+\end{itemize}
+\subsection{What about the stack?}
+\begin{itemize}
+  \item Since the stack grows backwards, we add an extra bit to each base/bounds reg pair that signifies whether it grows positive or negative.
+  \item Subtract size bounds from base bounds instead of adding if grows negative
+\end{itemize}
+\subsection{Support for sharing}
+\begin{itemize}
+  \item Being able to share specific code segments can also be useful. 
+  \item In order to protect certain parts, protection bits are used to signify which users/programs are allowed to do what (read, write, execute).
+\end{itemize}
+\subsection{Fine-grained vs Corase-grained segmentation}
+\begin{itemize}
+  \item Corse-grained have few large segments. 
+  \item Fine-grained allows for more smaller segments; this requires more hardware support through a segment table.
+\end{itemize}
+\subsection{OS Support}
+\begin{itemize}
+  \item On context switch, the OS should save all segment registers to ensure that they are restored to correct values.
+  \item External fragmentation: small gaps of physical memory in between segments
+  \item Excessive fragmentation can cause the OS to struggle to find large enough contiguous blocks of memory when allocating a new process.
+  \item A naive fix is to compact each segment and rearrange them to be contiguous; this is expensive 
+  \item Free-list management is generaly preferred. Algorithms include best-fit, worst-fit, first-fit, and more complex ones such as buddy algorithm.
+\end{itemize}
+\chap{17}{Free-Space Management}
+\begin{itemize}
+  \item Managing free space is easy when you have fixed-size units (such as through paging).
+  \item Becomes more difficult through user-level memory allocation (like \texttt{malloc()} and \texttt{free()})
+  \item The OS must handle fragmentation in some way
+\end{itemize}
+\subsection{Assumptions}
+\begin{itemize}
+  \item A basic interface via \texttt{void *malloc(size\_t size)} and \texttt{void free(void *ptr)}
+  \item The data structure that manages free space in the heap is some kind of free list
+  \item Ignore internal fragmentation 
+  \item Allocated memory cannot be relocated (no compaction) 
+  \item Allocator manages a contiguous fixed size region of bytes
+\end{itemize}
+\subsection{Low-level mechanisms}
+\subsubsection{Splitting and Coalescing}
+Consider the following:
+\begin{center}
+\begin{tikzpicture}[x=0.25cm, y=1cm]
+  % segments: start/end/label/fill colour
+  \foreach \a/\b/\label/\fill in {0/10/free/white, 10/20/used/gray!30, 20/30/free/white} {
+    \filldraw[fill=\fill, draw=black] (\a,0) rectangle (\b,1);
+    \node at ({(\a+\b)/2}, 0.5) {\label};
+  }
+  % address labels under the boundaries
+  \foreach \x in {0,10,20,30}
+    \node[below] at (\x,0) {\x};
+\end{tikzpicture}
+\end{center}
+The free list for this heap would have two elements and look something like:
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1cm,
+    elem/.style={circle, fill=gray!30, minimum size=1.8cm, align=center, inner sep=1pt},
+    ->, >=Stealth, thick
+  ]
+  \node (head) {head};
+  \node[elem, right=of head] (e1) {addr:0\\len:10};
+  \node[elem, right=of e1]   (e2) {addr:20\\len:10};
+  \node[right=of e2] (null) {NULL};
+  \draw (head) -- (e1);
+  \draw (e1) -- (e2);
+  \draw (e2) -- (null);
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item Requesting anything larger than 10 bytes will fail
+  \item The allocator will have to perform splitting to allocate something smaller than 10 bytes
+  \item \textit{Splitting}: Split a segment of free memory into two; one is returned to the caller and the other remains on the free list.
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1cm,
+    elem/.style={circle, fill=gray!30, minimum size=1.8cm, align=center, inner sep=1pt},
+    ->, >=Stealth, thick
+  ]
+  \node (head) {head};
+  \node[elem, right=of head] (e1) {addr:0\\len:10};
+  \node[elem, right=of e1]   (e2) {addr:20\\len:1};
+  \node[elem, right=of e2]   (e3) {addr:21\\len:9};
+  \node[right=of e3] (null) {NULL};
+  \draw (head) -- (e1);
+  \draw (e1) -- (e2);
+  \draw (e2) -- (e3);
+  \draw (e3) -- (null);
+\end{tikzpicture}
+\captionof{figure}{Splitting (step 1)}
+\end{center}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1cm,
+    elem/.style={circle, fill=gray!30, minimum size=1.8cm, align=center, inner sep=1pt},
+    ->, >=Stealth, thick
+  ]
+  \node (head) {head};
+  \node[elem, right=of head] (e1) {addr:0\\len:10};
+  \node[elem, right=of e1]   (e2) {addr:21\\len:9};
+  \node[right=of e2] (null) {NULL};
+  \draw (head) -- (e1);
+  \draw (e1) -- (e2);
+  \draw (e2) -- (null);
+\end{tikzpicture}
+\captionof{figure}{Splitting (result)}
+\end{center}
+\begin{itemize}
+  \item Coalescing: merging contiguous regions of free space
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1cm,
+    elem/.style={circle, fill=gray!30, minimum size=1.8cm, align=center, inner sep=1pt},
+    ->, >=Stealth, thick
+  ]
+  \node (head) {head};
+  \node[elem, right=of head] (e1) {addr:0\\len:10};
+  \node[elem, right=of e1]   (e2) {addr:10\\len:10};
+  \node[elem, right=of e2]   (e3) {addr:20\\len:10};
+  \node[right=of e3] (null) {NULL};
+  \draw (head) -- (e1);
+  \draw (e1) -- (e2);
+  \draw (e2) -- (e3);
+  \draw (e3) -- (null);
+\end{tikzpicture}
+\end{center}
+\begin{center}
+\begin{tikzpicture}[
+    node distance=1cm,
+    elem/.style={circle, fill=gray!30, minimum size=1.8cm, align=center, inner sep=1pt},
+    ->, >=Stealth, thick
+  ]
+  \node (head) {head};
+  \node[elem, right=of head] (e1) {addr:0\\len:30};
+  \node[right=of e1] (null) {NULL};
+  \draw (head) -- (e1);
+  \draw (e1) -- (null);
+\end{tikzpicture}
+\captionof{figure}{After coalsecing}
+\end{center}
+\subsubsection{Tracking the size of allocated regions}
+\begin{itemize}
+  \item Since \texttt{free} does not take size as a parameter, the allocator must be able to deduce quickly the size of the region to free
+  \item Each block of allocated memory has a header that contains a magic number (integrity check) as well as how much data was allocated
+\end{itemize}
+\begin{center}
+\begin{tikzpicture}[x=1cm, y=1cm]
+  % header (size + magic), then the 20-byte region handed to the caller
+  \filldraw[fill=gray!30] (0,0) rectangle (4,-1);
+  \filldraw[fill=gray!30] (0,-1) rectangle (4,-2);
+  \draw (0,-2) rectangle (4,-5);
+  \node[anchor=west] at (0.1,-0.5) {size:};
+  \node[anchor=east] at (3.9,-0.5) {20};
+  \node[anchor=west] at (0.1,-1.5) {magic: 1234567};
+
+  % pointers into the block
+  \draw[->, >=Stealth, thick] (-1.4,0.1) -- (-0.3,0.1) node[pos=0, left] {hptr};
+  \draw[->, >=Stealth, thick] (-1.4,-2) -- (-0.3,-2) node[pos=0, left] {ptr};
+
+  % bracket over the returned region
+  \draw[gray, very thick] (4.3,-2) -- (4.5,-2) -- (4.5,-5) -- (4.3,-5);
+  \draw[gray, very thick] (4.5,-3.5) -- (4.65,-3.5)
+    node[right, text=black] {The 20 bytes returned to caller};
+\end{tikzpicture}
+\end{center}
+\begin{itemize}
+  \item When the user calls free, the allocator uses pointer arithmetic to figure out where the header begins.
+\end{itemize}
+\newpage
+\begin{ccode}
+#define MAGIC 1234567;
+
+typedef struct {
+  int size;
+  int magic;
+} header_t;
+
+void free(void *ptr) {
+  header_t *hptr = (header_t *) ptr - 1;
+  assert(hptr->magic == MAGIC);
+
+  /* ... */
+}
+
+typedef struct __node_t (
+  int size;
+  struct __node_t *next;
+) node_t;
+// embed the free list 
+// free list starts with one node of size 4096-bytes
+node_t *head = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+assert(head != MAP_FAILED);
+head->size = 4096 - sizeof(node_t);
+head->next = NULL;
+/* ... */
+\end{ccode}
+\subsubsection{Embedding a free list}
+See above  \\
+
+
 \end{document}
