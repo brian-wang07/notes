@@ -1,0 +1,14 @@
+\section{Gotchas and Mock Questions}\label{sec:gotchas}
+% Running list. Add questions while reading; self-test cold a day or two later.
+%   Each should be answerable out loud in under 60 seconds.
+
+\begin{enumerate}
+  \item What breaks if you \code{delete} a derived-class object through a base-class pointer without a virtual destructor? (\S\ref{sec:polymorphism})
+  \item Why is calling a virtual function in a constructor dangerous? (\S\ref{sec:polymorphism})
+  \item Difference between \code{static_cast} and \code{dynamic_cast}, and when does \code{dynamic_cast} return null vs throw? (\S\ref{sec:casting})
+  \item What is the diamond problem and how does virtual inheritance fix it? (\S\ref{sec:inheritance})
+  \item Why prefer \code{string_view} over \code{const string&}, and when does it dangle? (\S\ref{sec:vocab})
+  \item Explain move semantics and why \code{std::move} does not move anything by itself. (\S\ref{sec:move})
+  \item Walk through what happens when \code{push_back} triggers reallocation. (\S\ref{sec:containers})
+  \item When would you choose composition over inheritance? (\S\ref{sec:inheritance})
+\end{enumerate}

@@ -1,0 +1,40 @@
+\section{Plan}\label{sec:plan}
+% Source: C++ Interview Prep -- Reading & Practice Plan (Sep 27, 2026)
+
+Short-term review for C++ developer internship season, not HFT-core depth. The goal is recall speed
+and explaining things under pressure, not learning them for the first time. About 2 weeks: reading
+front-loaded in week 1, practice in week 2.
+
+\subsection*{Schedule}
+\begin{tabularx}{\textwidth}{|l|X|l|}
+\hline
+\textbf{Days} & \textbf{Focus} & \textbf{Sections} \\ \hline
+1--2  & EMC++ Ch.~5, Item 17, Ch.~4 & \S\ref{sec:move}, \S\ref{sec:special-members}, \S\ref{sec:smart-ptrs} \\ \hline
+3     & EMC++ Ch.~3, Ch.~6 & \S\ref{sec:modern-syntax}, \S\ref{sec:lambdas} \\ \hline
+4--5  & EC++ OOP items (7, 9, 10, 20, 32--40) & \S\ref{sec:polymorphism}, \S\ref{sec:inheritance} \\ \hline
+6     & EC++ template items (41--47) + Item 29 & \S\ref{sec:templates}, \S\ref{sec:exceptions} \\ \hline
+7     & ESTL; Josuttis Ch.~4, 7; C++17TCG Ch.~15--17, 19 & \S\ref{sec:containers}--\S\ref{sec:vocab} \\ \hline
+8     & Casting/RTTI; C++17/20 language features (cppref) & \S\ref{sec:casting}, \S\ref{sec:cpp17-20} \\ \hline
+9     & C++20 ranges/views + start LeetCode rewrites & \S\ref{sec:ranges} \\ \hline
+10--11 & Explanation drills across all topics; Anki review & all \\ \hline
+12    & Code-writing micro-exercises (templates, virtual dtor UB demo) & \S\ref{sec:gotchas} \\ \hline
+13    & Mock questions, cold self-test on the gotcha list & \S\ref{sec:gotchas} \\ \hline
+14    & Full mock interview, grab-bag of gotchas & \S\ref{sec:gotchas} \\ \hline
+\end{tabularx}
+
+If time runs short: days 1--7 (EMC++, EC++, ESTL) cover most of what a C++ dev screen asks. Days 8--9
+separate ``solid'' from ``clearly current.''
+
+\subsection*{Practice Methods}
+\begin{itemize}
+  \item \textbf{Anki}: one card per gotcha, not per topic. Skip anything that is already instant recall.
+  \item \textbf{Explanation drills}: explain each major topic out loud in under 60 seconds, from memory.
+    If it doesn't come out clean, that's a gap: re-read the item, don't just re-skim.
+  \item \textbf{Micro-exercises}: rewrite 5--10 LeetCode solutions (\code{map} $\leftrightarrow$ \code{unordered_map}
+    with a justification; manual loops $\to$ ranges pipelines); write a small template from scratch
+    (generic \code{clamp}, stack); run a missing-virtual-destructor bug under a sanitizer.
+  \item \textbf{Mock questions}: add to the running list in \S\ref{sec:gotchas} while reading and self-test
+    cold a day or two later.
+\end{itemize}
+
+\textit{Note:} if a target role's codebase is pinned before C++20, ask the recruiter whether ranges are worth the time.

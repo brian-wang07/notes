@@ -1,0 +1,110 @@
+\documentclass[11pt, a4paper]{article}
+
+% ── Encoding & fonts ──────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% ── Page geometry ─────────────────────────────────────────────────────────────
+\usepackage[margin=1in]{geometry}
+
+% ── Hyperlinks & auto-updating TOC ────────────────────────────────────────────
+\usepackage[hidelinks]{hyperref}   % hidelinks = no ugly red boxes
+
+% ── Math ──────────────────────────────────────────────────────────────────────
+\usepackage{amsmath, amssymb, amsthm}
+
+% ── Misc useful packages ──────────────────────────────────────────────────────
+\usepackage{tabularx}              % equal-width wrapping columns
+\usepackage{enumitem}              % tighter lists
+\usepackage{parskip}               % space between paragraphs instead of indent
+\usepackage{caption}
+
+% ── Theorem-like environments (optional, delete if not needed) ─────────────────
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{example}[theorem]{Example}
+\theoremstyle{remark}
+\newtheorem*{remark}{Remark}
+
+%tikz
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, fit, backgrounds}
+
+
+% Code blocks
+\usepackage{listings}
+\usepackage{xcolor}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    numbersep=8pt,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+}
+
+\lstnewenvironment{cppcode}[1][]{\lstset{language=C++, #1}}{}
+\lstnewenvironment{pycode}[1][]{\lstset{language=Python, #1}}{}
+\lstnewenvironment{ccode}[1][]{\lstset{language=C, #1}}{}
+\lstnewenvironment{bashcode}[1][]{\lstset{language=bash, #1}}{}
+% Inline C++, read verbatim (no escaping & # % _ ~ \): \cpp{a && b} or \cpp|f({1})| if braces are unbalanced
+% Not usable inside other commands' arguments (\section, \textbf, tabularx cells)
+\newcommand{\cpp}{\lstinline[language=C++]}
+\newcommand{\code}{\cpp}
+
+
+% Source tag: \src{EMC++ 23} prints a small gray [EMC++ 23] inline
+%   EMC++ = Effective Modern C++, EC++ = Effective C++, ESTL = Effective STL,
+%   Josuttis = The C++ Standard Library 2e (C++11 only),
+%   C++17TCG = Josuttis, C++17 - The Complete Guide, cppref = cppreference
+\newcommand{\src}[1]{{\small\textcolor{gray}{[#1]}}}
+
+% ── Document metadata ─────────────────────────────────────────────────────────
+\title{C++ Review}
+\author{Brian}
+\date{\today}
+
+% Uncomment to compile only some topics (page numbers/refs stay correct):
+ \includeonly{01-move-semantics}
+
+% ──────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\maketitle
+\tableofcontents
+\newpage
+
+\setcounter{section}{-1}   % plan = §0, so section numbers match file numbers
+\include{00-plan}
+% ── Phase A: modern C++ core (Effective Modern C++) ──
+\include{01-move-semantics}
+\include{02-special-members}
+\include{03-smart-pointers}
+\include{04-modern-syntax}
+\include{05-lambdas}
+% ── Phase B: OOP (Effective C++) ──
+\include{06-polymorphism}
+\include{07-inheritance-design}
+\include{08-casting-rtti}
+% ── Phase C: templates and exceptions ──
+\include{09-templates}
+\include{10-exception-safety}
+% ── Phase D: the standard library ──
+\include{11-containers}
+\include{12-iterators-algorithms}
+\include{13-vocabulary-types}
+% ── Phase E: C++17/20 ──
+\include{14-cpp17-20-language}
+\include{15-ranges}
+% ── Phase F: practice ──
+\include{16-gotchas}
+
+\end{document}

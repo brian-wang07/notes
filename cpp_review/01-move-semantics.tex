@@ -1,0 +1,356 @@
+\section{Move Semantics and Perfect Forwarding}\label{sec:move}
+% Sources, in order: EMC++ Ch. 5, Items 23-30 -> Josuttis Ch. 4 (move semantics and container performance)
+%   Most commonly asked modern-C++ topic.
+
+\subsection{std::move and std::forward}
+\src{EMC++ 23}
+\begin{itemize}
+  \item \texttt{std::move} is an unconditional cast to an rvalue ref, and \texttt{std::forward} only does this cast under specific conditions.
+\end{itemize}
+\begin{cppcode}
+// std::move 
+template<typename T>
+typename remove_reference<T>::type&&
+move(T&& param) {
+  using ReturnType = typename remove_reference<T>::type&&;
+  return static_cast<ReturnType>(param);
+}
+\end{cppcode}
+\begin{itemize}
+  \item \texttt{typename}: explicitly declares that a dependent qualified name is a type.
+  \item \texttt{decltype(auto)}: deduce return type and keep refs
+  \item the '\&\&' in the return type tells us that this reterns an rvalue ref.
+  \item We must strip existing references since an rvalue ref to an lvalue ref collapses to an lvalue ref.
+  \item Notice that there is no \texttt{remove\_cvref}; constness remains. 
+  \item Careful!!! this can lead to silent copying.
+\end{itemize}
+\begin{cppcode}
+struct Widget {
+  Widget() = default;
+  Widget(const Widget&) {std::cout << "copy ctor\n";}
+  Widget(Widget&&) {std::cout << "move ctor\n";}
+}
+void test () {
+  const Widget w;
+  Widget w2 = std::move(w); // will invoke copy ctor
+}
+\end{cppcode}
+\begin{itemize}
+  \item A \texttt{const Widget\&\&} cannot bind to \texttt{Widget\&\&}, but can bind to \texttt{const Widget\&}.
+  \item \cpp{std::forward} on the other hand is a conditional cast:
+\end{itemize}
+\begin{cppcode}
+template <class T>
+T&& forward(typename std::remove_reference_t<T>& t) noexcept;
+\end{cppcode}
+\begin{itemize}
+  \item Recall that an rvalue ref to an lvalue ref collapses to an lvalue ref; forward utilizes this to ensure that function params preserve their original type.
+  \item The act of passing a variable into a function will cause its value category to unconditinally change to an lvalue (since its given a name), even if its type is \cpp{T&&}.
+  \item \cpp{std::forward} preserves the value category of that object before it was passed; if it was 
+  \item concretely, "when t is a forwarding reference, this overload forwards the argument to another function with the value category it had when passed to the calling function".
+  \item Forwarding reference: \cpp{T&&} is a forwarding reference iff the type T must be deduced when \cpp{T&&} is called.
+\end{itemize}
+
+\subsection{Universal References vs Rvalue References}
+\src{EMC++ 24}
+\begin{itemize}
+  \item \cpp{T&&} has two meanings: one is an rvalue reference, and the other is either an rvalue or an lvalue (universal reference). 
+\end{itemize}
+\begin{cppcode}
+void f(Widget&& param); // rvalue ref
+Widget&& var1{Widget()}; // rvalue ref
+auto&& var2 = var1; // not an rvalue ref (var1 is named, T& && collapses to T&)
+template<typename T>
+void f(std::vector<T>&& param); // rvalue ref (only binds to rvalue refs)
+template<typename T>
+void f(T&& param); // not rvalue ref (universal, can bind to either lvalue or rvalue))
+\end{cppcode}
+\begin{itemize}
+  \item Universal references are permitted to bind to rvalue and lvalue references, and any cv qualifiers.
+  \item These are also known as forwarding references as universal references should almost always be passed via \cpp{std::forward}.
+  \item If an rvalue is passed into a function via a forwarding reference, it will implicitly be converted into an lvalue as it becomes named within the function body.
+  \item This means that constructing an object here will always invoke the copy constructor; \cpp{std::forward<T>} ensures that the original value category that was passed is respected.
+  \item passing an lvalue will remain unchanged, but passing an rvalue will invoke the move constructor.
+  \item Universal references can also be a parameter pack; this is how \cpp{emplace_back} is implemented.
+\end{itemize}
+\begin{cppcode}
+template<class T, class Allocator = allocator<T>>
+class vector {
+public:
+template<class... Args>
+void emplace_back(Args&&... args); // universal reference; when constructing the object in place it will do T(std::forward<Args>(args)...)
+}
+\end{cppcode}
+\begin{itemize}
+  \item Note that since universal references are when any deduction on the type has to be done in the call, \cpp{auto&&} is also a universal reference; this can be used in lambda functions to avoid copies.
+\end{itemize}
+\begin{cppcode}
+auto timeFuncInvocation = 
+  [](auto&& func, auto&&... params) { // universal references
+    /* start timer... */
+    std::forward<decltype(func)>(func)(
+      std::forward<decltype<params>(params)...
+    );
+    /*stop timer and record time*/
+  };
+\end{cppcode}
+\begin{itemize}
+  \item Since we dont have access to \cpp{T} we need this \cpp{std::forward<decltype(arg)>} idiom:
+  \item Has essentially the same behaviour as \cpp{std::forward<T>}.
+\end{itemize}
+consider:
+\begin{cppcode}
+  
+\end{cppcode}
+
+\subsection{std::move on Rvalue Refs, std::forward on Universal Refs}
+\src{EMC++ 25}
+\begin{itemize}
+  \item \cpp{std::move} should only ever be used on rvalue references or if you are certain it is safe to steal resources.
+  \item \cpp{std::forward} should be used whenever you have an object that may or may not be moved from. 
+  \item I.e. rvalue refs should always be cast to rvalues (with move) when forwarding to other functions; universal references should sometimes be cast to rvalues (with forward) because theyre only sometimes rvalues.
+\end{itemize}
+\begin{cppcode}
+class Widget {
+public:
+  Widget(Widget&& rhs) // rvalue ref; this can ONLY bind to rvalues
+   : name(std::move(rhs.name)), p(std::move(rhs.p)) {}
+
+  template<typename T>
+  void setName(T&& newName) { //universal reference; can bind to anything
+    name = std::forward<T>(newName); // conditional rvalue cast
+  }
+private:
+  std::string name;
+  std::shared_ptr<SomeDataStructure> p;
+
+};
+\end{cppcode}
+\begin{itemize}
+  \item Technically using \cpp{std::forward} on rvalue references will yield the same result as \cpp{std::move}:
+\end{itemize}
+\begin{cppcode}
+void f(std::string&& s) {
+  g(std::move(s)); // okay, as we have rvalue ref
+  g(std::forward<std::string>(s)) // same result, just uglier
+}
+\end{cppcode}
+\begin{itemize}
+  \item Note that the other way around compiles but may lead to UB
+\end{itemize}
+\begin{cppcode}
+class Widget {
+public:
+  template<typename T>
+  void setName(T&& newName) { // universal; can bind to lvalue or rvalue
+    name = std::move(newName); // bad!
+  }
+  /* ... */
+};
+Widget w;
+std::string n = "my widget";
+w.setName(n);
+// using n is UB since it has been moved from
+\end{cppcode}
+\begin{itemize}
+  \item While in the example above overloading \cpp{setName} with two variants (\cpp{const string&} and \cpp{string&&}) is an option, a function that takes $n$ arguments will require $2^n$ overloads.
+  \item Functions that take an argument pack would require a seemingly infinite number of overloads; the universal reference ensures that only one implementation is required.
+\end{itemize}
+\begin{cppcode}
+template<class T, class... Args>
+shared_ptr<T> make_shared(Args&&... args);
+
+template<class T, class... Args> 
+unique_ptr<T> make_unique(Args&&... args);
+\end{cppcode}
+\begin{itemize}
+  \item Since using after move is UB, forwarding a universal ref should be the final use of the reference (once its safe to steal its resources).
+\end{itemize}
+\begin{cppcode}
+template<typename T>
+void setSignText(T&& text) {
+  sign.setText(text); // use text, but cannot steal yet
+  auto now = std::chrono::system_clock::now();
+  signHistory.add(now, std::forward<T>(text)); // conditionally cast to rvalue
+}
+\end{cppcode}
+\begin{itemize}
+  \item Returning an object passed as an rvalue or universal reference by value benefits from move or forwarding:
+\end{itemize}
+\begin{cppcode}
+Matrix operator+(Matrix&& lhs, const Matrix& rhs) {
+  lhs += rhs;
+  return std::move(lhs); // doing return lhs will copy lhs into return value.
+  
+}
+// similarly,
+template<typename T>
+requires std::convertible_to<T&&, Fraction> // C++20
+Fraction reduceAndCopy(T&& frac) {
+  frac.reduce();
+  return std::forward<T>(frac);
+}
+\end{cppcode}
+\begin{itemize}
+  \item However, doing this on local variables returned by value is very bad!
+\end{itemize}
+\begin{cppcode}
+Widget makeWidget() {
+  Widget w;
+  /* ... */
+  w.doStuff();
+  // return std::move(w); BAD!!
+  return w;
+}
+\end{cppcode}
+\begin{itemize}
+  \item All modern compilers will perform an optimization called named return value optimization (NRVO) and construct \cpp{w} in the place of the return value slot.
+  \item However, one of the requirements is that the returned local object must match exactly the return type in the function signature; since move casts to an rvalue ref, they dont match and NRVO cannot be performed.
+\end{itemize}
+
+\subsection{Avoid Overloading on Universal References}
+\src{EMC++ 26}
+Consider:
+\begin{cppcode}
+std::multiset<std::string> names;
+void logAndAdd(const std::string& name) {
+  auto now = std::chrono::system_clock::now();
+  log(now, "logAndAdd");
+  names.emplace(name);
+}
+/* ... */
+std::string petName("Alice");
+logAndAdd(petName); //lvalue string
+logAndAdd(std::string("Bob")); //rvalue string
+logAndAdd("AliceBob"); //string literal
+\end{cppcode}
+\begin{itemize}
+  \item This however has inefficiencies when an rvalue is passed, since \cpp{name} is an lvalue it gets copied into \cpp{names}. 
+  \item We can try using a univerasl reference to fix this:
+\end{itemize}
+\begin{cppcode}
+template <typename T>
+void logAndAdd(T&& name) {
+  auto now = std::chrono::system_clock::now();
+  log(now, "logAndAdd");
+  names.emplace(std::forward<T>(name)); // moved for rvalues
+}
+\end{cppcode}
+\begin{itemize}
+  \item But what happens if we overload \cpp{logAndAdd}?
+\end{itemize}
+\begin{cppcode}
+std::string nameFromIdx(int idx); // return name corresponding to idx
+
+void logAndAdd(int idx)  {
+  auto now = std::chrono::system_clock::now();
+  log(now, "logAndAdd");
+  names.emplace(nameFromIdx(idx));
+}
+
+short nameIdx{42};
+logAndAdd(nameIdx); // ERROR
+\end{cppcode}
+\begin{itemize}
+  \item Since the universal reference binds to everything (and is templated), it takes precedence over the int overload.
+  \item We try to emplace into a string multiset and thus get an error.
+  \item Universal reference functions are the greediest functions; they will take precedence over any overload that does not exactly match the signature.
+  \item This can lead to some tricky side effects:
+\end{itemize}
+\begin{cppcode}
+class Person {
+public:
+  template<typename T>
+  Person(T&& n) : name(std::forward<T>(n)) {}
+  
+  Person(const Person& rhs); // copy ctor (compiler generated)
+  Person(Person&& rhs); // move ctor (compiler generated)
+};
+
+Person p("Alice");
+Person p2(p); //Error!
+\end{cppcode}
+\begin{itemize}
+  \item Even though it looks like we are invoking the copy ctor, the type that p is when we pass it \cpp{Person&} matches the universal reference better (no const)
+  \item Thus we call the constructor, and attempt to create a string from a Person type which errors.
+\end{itemize}
+\subsection{Alternatives to Overloading on Universal References}
+\src{EMC++ 27}
+\begin{itemize}
+  \item Pre concepts: use tag dispatch
+\end{itemize}
+\begin{cppcode}
+template<typename T>
+void logAndAdd(T&& name) {
+  logAndAddImpl(std::forward<T>(name), std::is_integral<std:remove_reference<T>::type());
+}
+\end{cppcode}
+Note we have to add the \cpp{std::remove_reference} since if we pass an lvalue, T gets deduced to an lvalue reference and an int reference will return false for \cpp{std::integral}.
+
+\begin{cppcode}
+template<typename T>
+void logAndAddImpl(T&&name, std::false_type) { // non-integral
+  /* ... */
+  names.emplace(std::forward<T>(name));
+}
+
+void logAndAddImpl(int idx, std::true_type) { logAndAdd(nameFromIdx(idx)); // guaranteed to match correct one}
+\end{cppcode}
+More modern, use \cpp{requires} or \cpp{if constexpr}
+\begin{cppcode}
+template<typename T>
+  requires (!std::is_integral_V<std::remove_reference_t<T>>)
+void logAndAdd(T&& name) {/* ... */}
+
+// OR
+
+// match everything to the universal ref
+template <typename T>
+void logAndAdd(T&& name) {
+  if constexpr (std::is_integral_v<std::remove_reference_t<T>>) {
+    /* ... */
+  } else {
+    /* ... */
+  }
+}
+\end{cppcode}
+The tricker case is when there is also inheritance:
+\begin{cppcode}
+class Person {
+public:
+    template <typename T>
+    explicit Person(T&& n) : name(std::forward<T>(n)) {}
+    Person(const Person& rhs);
+    Person(Person&& rhs);
+    ...
+};
+
+class SpecialPerson : public Person {
+    SpecialPerson(const SpecialPerson& rhs) : Person(rhs) {}       // calls Person(T&&), not Person(const Person&)
+    SpecialPerson(SpecialPerson&& rhs) : Person(std::move(rhs)) {} // same problem
+};
+\end{cppcode}
+We can require that the forwarded ctor for Person is turned off if we pass a derived type and if it is not constructable from the type passed.
+\begin{cppcode}
+\begin{cppcode}
+class Person {
+public:
+  template <typename T>
+    requires (!std::derived_from<std::decay_t<T>, Person> && 
+              std::constructible_from<std::string, T&&>)
+    explicit Person(T&& n) : name(std::forward<T>(n)) {}
+    ...
+};
+\end{cppcode}
+the \cpp{std::decay_t<T>} strips any cv type quals and any references.
+\subsection{Reference Collapsing}
+\src{EMC++ 28}
+
+\subsection{Assume Move Operations Are Not Present, Cheap, or Used}
+\src{EMC++ 29}
+
+\subsection{Perfect Forwarding Failure Cases}
+\src{EMC++ 30}
+
+\subsection{Moves in Containers}
+\src{Josuttis Ch.~4}
