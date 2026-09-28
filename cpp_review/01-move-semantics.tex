@@ -345,12 +345,125 @@ public:
 the \cpp{std::decay_t<T>} strips any cv type quals and any references.
 \subsection{Reference Collapsing}
 \src{EMC++ 28}
+consider:
+\begin{cppcode}
+template<typename T>
+void func(T&& param); // universal ref
 
-\subsection{Assume Move Operations Are Not Present, Cheap, or Used}
-\src{EMC++ 29}
+Widget widgetFactory(); // function returning rvalue
+
+Widget w; // lvalue
+func(w); // call func with lvalue, deduced to be Widget&
+func(widgetFactory()); // call func with rvalue, deduced to be Widget
+\end{cppcode}
+\begin{itemize}
+  \item While references to references are illegal in C++, doing \cpp{func(w)} would technically be deduced as \cpp{void func(Widget& && param)}
+  \item The references get collapsed
+  \item If either reference is an lvalue ref then it gets collapsed to an lvalue ref; otherwise its an rvalue ref.
+  \item This is how \cpp{std::forward} conditionally casts
+  \item Consider:
+\end{itemize}
+\begin{cppcode}
+  
+template<typename T>
+void f(T&& fParam) {
+  ...
+  someFunc(std::forward<T>(fParam));
+}
+
+template<typename T>
+T&& forward(typename std::remove_reference_t<T>& param) {
+  return static_cast<T&&>(param);
+}
+\end{cppcode}
+suppose we pass an lvalue \cpp{Widget} into \cpp{f} (which deduces to \cpp{Widget&}):
+\begin{cppcode}
+Widget& && forward(typename std::remove_reference_t<Widget&>& param) {
+  return static_cast<Widget& &&>(param);
+}
+
+// remove_reference_t gets collapsed (this is there to ensure that T can never be deduced and must explicitly be written)
+Widget& && forward(Widget& param) {
+  return static_cast<Widget& &&>(param);
+}
+
+//  reference collapsing
+Widget& forward(Widget& param) {
+  return static_cast<Widget&>(param);
+} // returns lvalue ref
+\end{cppcode}
+For an rvalue, \cpp{f} deduces to \cpp{Widget}:
+\begin{cppcode}
+Widget && forward(Widget param) {
+  return static_cast<Widget &>(param);
+} // returns rvalue ref even though param was an lvalue!
+\end{cppcode}
 
 \subsection{Perfect Forwarding Failure Cases}
 \src{EMC++ 30}
+\begin{itemize}
+  \item The definition of forwarding is when one function passes its parameters to another function. The second function should receive the exact same objects that the first function received.
+  \item Perfect forwarding extends on this by also ensuring that the value categories and cv qualifiers are alos preserved.
+  \item there are cases where this may fail however, specifically when the template arguments for the forwarding function cannot be deduced.
+\end{itemize}
+Consider calling a function \cpp{f} indirectly by forwarding its args through \cpp{fwd};
+\begin{cppcode}
+template<typename... Ts>
+void fwd(Ts&&... params) {
+  f(std::forward<Ts>(params)...);
+}
+
+void f(const std::vector<int>& v) {
+  ...
+}
+
+fwd(1, 2, 3) // works! rvalues 1, 2, 3 are moved to f and no temporaries are constructed.
+
+f({1, 2, 3}); // converted to std::vector<int>
+fwd({1, 2, 3}); // error! cannot infer template argument 'T'
+\end{cppcode}
+\begin{itemize}
+  \item When we pass \texttt{ {1, 2, 3} } directly to \cpp{f}, the compiler compares the args at the call site against the function parameters and sees if there is a trivial conversion.
+  \item When we call \cpp{f} through \cpp{fwd}, it hides the parameters and thus the compiler cannot figure out what type \texttt{ {1, 2, 3} } is.
+\end{itemize}
+as well, consider:
+\begin{cppcode}
+class Widget {
+public:
+  static const std::size_t MinVals = 28; // MinVal declaration
+  ...
+};
+
+// in some other TU
+template<typename T>
+void f(std::size_t val) {/*...*/}
+f(Widget::MinVals); // works! f(28)
+fwd(Widget::MinVals); // Linked error (usually)! since Widget::MinVals has been folded
+\end{cppcode}
+Forwarding can also fail on overloaded function names:
+\begin{cppcode}
+void f(int (*pf)(int)); // pf = "processing function"
+int processVal(int value) { /*...*/ }
+int processVal(int value, int priority) { /*...*/ }
+
+f(processVal); // fine; compiler figures out to call the process(int) overload
+fwd(processVal); // Error! ambiguous overload
+\end{cppcode}
+This is exactly the same as the initializer braces situation; calling through \cpp{fwd} hides the function signature of \cpp{f} and the compiler cannot deduce which overload to call.\\
+Same thing happens with templates:
+\begin{cppcode}
+template<typename T>
+T workOnVal(T param) { /*...*/ }
+fwd(workOnVal); // Error!
+\end{cppcode}
+We can fix this by manually casting to the function we want:
+\begin{cppcode}
+using ProcessFuncType = int (*)(int);
+
+ProcessFuncType ProcessValPtr = processVal;
+fwd(processValPtr);
+fwd(static_cast<ProcessFuncType>(workonVal));
+\end{cppcode}
 
 \subsection{Moves in Containers}
 \src{Josuttis Ch.~4}
